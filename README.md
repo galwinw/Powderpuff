@@ -1,25 +1,41 @@
-# Head Hoops
+# Powderpuff Playbook
 
-A simple 2-player, big-head basketball game in the style of *Head Soccer*. It runs in the browser.
+Our flag football team's playbook app: animated plays, "my job" highlighting, positions, routes, rules and a Game Day call sheet. Coaches can edit plays and the roster right in the app.
 
-**Play:** open `index.html` in any modern browser. There's nothing to install or build.
+**Live site:** https://galwinw.github.io/game1/
 
-## Controls
+## What's inside
 
-| | Move | Jump | Shoot |
-|---|---|---|---|
-| **P1 (red)** | A / D | W | S |
-| **P2 (blue)** | ← / → | ↑ | ↓ |
+| Tab | What it does |
+|---|---|
+| **Offense / Defense** | Every play, animated. Tap a player to see their job in plain words. Pick "Who are you?" once and your role is highlighted in every play. |
+| **Learn** | Rules, a glossary, every position explained, and an animated route guide. |
+| **Game Day** | Which play to call in each situation, plus a drive tracker (down, first downs, QB run used). |
+| **Team** | Roster with positions, team settings, and coach login. |
 
-- **Space / Enter**: start or rematch
-- **P / Esc**: pause (R restarts while paused)
-- **M**: mute
+The starter playbook has 6 offensive plays (Slant-Flat, Bubble Screen, Mesh, Flood, Jet Sweep, QB Draw) and 2 defenses (2-Rush Zone, Man + Safety), built around our rules: 7v7, two first downs per drive, one QB run per set of downs, up to 2 no-hands blockers and 2 rushers.
 
-## Rules
+## Turning on cloud saving for coaches (one time, about 10 minutes)
 
-- 90-second game. Whoever has the most points at the buzzer wins. If it's tied, overtime is sudden death: next basket wins.
-- Get close to the ball and press shoot to arc it at your opponent's hoop. P1 attacks the right hoop and P2 attacks the left.
-- Shots from beyond the 3PT line are worth **3**. Everything else is worth **2**.
-- Jump near the rim and shoot to **DUNK**.
-- Jump into your opponent's shot to **BLOCK** it. You can also head the ball around.
-- A shot that's already in the air when the buzzer sounds still counts.
+Until this is set up, the app works fully but edits only save on the device that made them. To let coaches save changes for the whole team:
+
+1. **Create a free Supabase project** at https://supabase.com (sign up → New project). Any name and region; save the database password somewhere.
+2. **Create the table:** in the project, open **SQL Editor → New query**, paste everything from [`supabase/schema.sql`](supabase/schema.sql), and click **Run**.
+3. **Only allow invited coaches:** go to **Authentication → Sign In / Providers** and turn **off** "Allow new users to sign up".
+4. **Add each coach:** **Authentication → Users → Add user → Create new user**. Enter their email and a password, and tick "Auto Confirm User". Give them the login.
+5. **Connect the app:** go to **Project Settings → API**. Copy the **Project URL** and the **anon public** key into [`config.js`](config.js). (Or send them to Claude and it will do this part.) Both values are safe to publish: the database only lets logged-in coaches make changes.
+6. Push the change. Coaches log in on the **Team** tab, and their edits reach everyone.
+
+The first time a coach saves, the starter plays are copied to the cloud.
+
+## How it's built
+
+A plain static site with no build step: `index.html`, `css/app.css`, and ES modules in `js/`:
+
+- `data.js`: starter playbook, positions, routes, rules and glossary
+- `field.js`: field drawing and play animation
+- `editor.js`: the coach play editor
+- `store.js`: loading and saving (Supabase or this device)
+- `app.js`: pages and navigation
+
+GitHub Pages serves the site from the `gh-pages` branch. To preview locally, run `python3 -m http.server` in this folder and open http://localhost:8000.
