@@ -140,6 +140,8 @@ p { margin: 0.4rem 0; }
 .player-label { font-family: var(--font-body); font-weight: 700; pointer-events: none; }
 .ghost { fill: rgba(255,255,255,0.12); stroke: rgba(255,255,255,0.5); stroke-width: 0.1; stroke-dasharray: 0.3 0.2; }
 .ghost-label { fill: rgba(255,255,255,0.65); font-size: 0.75px; text-anchor: middle; font-family: var(--font-body); font-weight: 700; }
+.mark-dot { fill: var(--accent); stroke: #14171f; stroke-width: 0.12; }
+.mark-label { fill: #ffffff; font-size: 1px; font-weight: 700; font-family: var(--font-body); paint-order: stroke; stroke: rgba(0,0,0,0.65); stroke-width: 0.28px; }
 .me-ring { fill: none; stroke: var(--accent); stroke-width: 0.35; }
 .tappable { cursor: pointer; }
 .field-svg { width: 100%; max-width: 100%; aspect-ratio: 1; display: block; border-radius: 10px; touch-action: manipulation; }
@@ -177,6 +179,15 @@ p { margin: 0.4rem 0; }
 .route-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
 .route-card { display: grid; grid-template-columns: 120px 1fr; gap: 14px; align-items: start; cursor: pointer; }
 .route-card h3 { margin-top: 0; }
+a.route-card { text-decoration: none; }
+.dots { display: inline-flex; margin-right: 4px; }
+.dots .dot { margin-right: -5px; }
+.dots .dot:last-child { margin-right: 6px; }
+.steps { padding-left: 1.4em; margin: 0; }
+.steps li { margin: 8px 0; padding-left: 4px; }
+.steps li::marker { font-family: var(--font-display); font-weight: 800; font-size: 1.15em; }
+.grow { flex: 1; min-width: 0; }
+.lesson-nav { display: flex; justify-content: space-between; gap: 10px; margin: 6px 0 20px; }
 .route-card.focus { border: 2px solid var(--accent); }
 .route-svg { width: 120px; aspect-ratio: 1; border-radius: 10px; display: block; max-width: 100%; }
 .rules { padding-left: 1.3em; margin: 0; }

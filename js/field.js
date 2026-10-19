@@ -118,6 +118,13 @@ export function drawPlay(svg, play, { highlight = null, thumb = false, onPlayer 
     const g = el("g", { opacity: dim(p.id) ? 0.22 : 1 }, routes);
     drawRoute(g, p, posInfo(p.id).color, thumb);
   }
+  for (const m of play.marks || []) {
+    const g = el("g", {}, routes);
+    el("circle", { cx: m.at[0], cy: sy(m.at[1]), r: 0.45, class: "mark-dot" }, g);
+    const left = m.side === "left";
+    const t = el("text", { x: m.at[0] + (left ? -0.9 : 0.9), y: sy(m.at[1]) + 0.32, class: "mark-label", "text-anchor": left ? "end" : "start" }, g);
+    t.textContent = m.label;
+  }
   for (const p of play.players) {
     const info = posInfo(p.id);
     const g = el("g", { class: "player" + (onPlayer ? " tappable" : ""), "data-id": p.id, opacity: dim(p.id) ? 0.45 : 1, transform: `translate(${p.start[0]},${sy(p.start[1])})` }, players);

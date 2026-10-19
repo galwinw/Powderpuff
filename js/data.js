@@ -318,3 +318,124 @@ export const DEFAULT_SETTINGS = {
     "Flag guarding (using your hand or arm to protect your flag) is a penalty.",
   ],
 };
+
+// Learn > Positions: the simple roles players need to know. The play diagrams still
+// show each spot separately (so everyone can find their own route), but these are the jobs.
+export const POSITION_GROUPS = [
+  {
+    id: "qb", side: "offense", name: "Quarterback", ids: ["QB"],
+    job: "Takes the snap, then throws the ball, hands it off, or runs with it. The QB can run past the line only once per set of downs, so save it for when it counts.",
+    tips: ["Know where your first look is before the snap.", "Throw it early. Rushers start close, so you have about 2–3 seconds.", "If no one is open and there's space, take off (if your run is still available)."],
+    good: "Calm under pressure, accurate on short throws, a loud clear voice.",
+  },
+  {
+    id: "center", side: "offense", name: "Center", ids: ["C"],
+    job: "Snaps the ball back to the QB, then is usually one of the two blockers. Blockers can catch passes too.",
+    tips: ["Snap first, then turn and find the nearest rusher.", "Blocking = keep getting in front of the rusher. No hands, just shuffle your feet.", "Make the rusher go wide, away from the middle."],
+    good: "Reliable snapper, quick feet, doesn't give up.",
+  },
+  {
+    id: "rb", side: "offense", name: "Running Back", ids: ["RB"],
+    job: "Lines up next to the QB. The second blocker on most plays, runs with the ball on handoffs, and slips out for short safety-valve catches.",
+    tips: ["Block first, then look for open grass.", "On a lead block, get to the spot BEFORE the runner.", "When you slip out, turn around and show your hands to the QB."],
+    good: "Hustles, quick, good hands on short catches.",
+  },
+  {
+    id: "receivers", side: "offense", name: "Receivers", ids: ["LW", "LS", "RS", "RW"],
+    job: "Line up where the play shows, run your route exactly, get open, catch, and run. Your route is written on every play, so your main job is knowing the routes.",
+    tips: ["Wide receivers line up near the sideline; slot receivers line up between them and the center. Same job, different spot.", "Run full speed even when the ball isn't coming. It pulls defenders away from your teammates.", "After your cut, eyes on the QB and hands up.", "Catch with your hands first, then run. Don't guard your flag."],
+    good: "Quick, sure hands, listens.",
+    routesLink: true,
+  },
+  {
+    id: "rushers", side: "defense", name: "Rushers", ids: ["RC", "RQ"],
+    job: "Start 2–3 yards from the blockers and chase the QB. One rusher (Contain) stays on the outside so nobody gets around them. The other (Chase) goes straight at the QB.",
+    tips: ["Go around blockers, never through them. Flags only, no touching players.", "Fake one way, burst the other. Blockers can't grab you.", "Can't get there? Get your hands up to block the throw.", "Contain rusher: if the play goes wide, chase it to the sideline."],
+    good: "Quick first step, relentless, good flag puller.",
+  },
+  {
+    id: "short", side: "defense", name: "Short Defenders", ids: ["LF", "MID", "RF"],
+    job: "Guard the short area, about 5 yards deep: left, middle, or right. Whoever comes into your area is yours. In Man + Safety, you follow one receiver instead.",
+    tips: ["Eyes on the QB. Break toward the ball when it's thrown.", "See blockers running your way? A screen or sweep is coming. Yell it!", "Pull flags with two hands, stay low, don't dive."],
+    good: "Reliable flag puller, reads the QB.",
+  },
+  {
+    id: "deep", side: "defense", name: "Deep Defenders", ids: ["DL", "DR"],
+    job: "Guard the deep half of the field on your side. Nobody gets behind you, ever.",
+    tips: ["Start about 10–12 yards back.", "Back up as receivers run deep. Stay deeper than the deepest one.", "Short catches in front of you are OK. Come up and pull the flag."],
+    good: "Fast, calm, good at tracking the ball.",
+  },
+];
+
+// Learn > Routes: the routes the team has been taught, explained in depth.
+// Demo coordinates use the field system above; the QB throws to the receiver at `throwAt`.
+export const ROUTE_LESSONS = [
+  {
+    id: "slant", name: "Slant",
+    summary: "3 hard steps forward, then cut at an angle toward the middle and keep running.",
+    start: [24, -0.6], path: [[24, 2.5], [16, 8.5], [12.5, 11]], throwAt: 0.55,
+    marks: [{ at: [24, 2.5], label: "Step 3: cut!", side: "left" }],
+    steps: [
+      "Line up where the play shows you, outside foot back, weight forward.",
+      "Explode off the line: 3 quick, hard steps straight ahead. Count them: 1, 2, 3.",
+      "On step 3, plant your outside foot hard and cut toward the middle on a diagonal.",
+      "Look for the ball right away. It comes fast, in about 1 second. Hands up, thumbs together.",
+      "Catch it and keep running the same direction, then turn upfield.",
+    ],
+    tips: ["Make the cut sharp. Plant and go, don't curve around.", "Stay on your diagonal. Don't drift flat across the field.", "Run through the catch. Never stop and wait for the ball."],
+    mistakes: ["Running too deep before cutting. The QB needs it fast.", "Slowing down to look for the ball.", "Cutting straight across instead of on an angle."],
+    beats: "The rushers, because the ball is out before they get there. It also works when your defender lines up on your outside or backs off you.",
+    qbTip: "Throw as the receiver plants on step 3, aimed just in front of them.",
+  },
+  {
+    id: "out", name: "Out",
+    summary: "Run 8 steps straight, plant your inside foot, and cut straight to the sideline.",
+    start: [19, -0.6], path: [[19, 8], [28.5, 8], [29, 10]], throwAt: 1.35,
+    marks: [{ at: [19, 8], label: "Step 8: plant & cut", side: "left" }],
+    steps: [
+      "Line up where the play shows you.",
+      "Run 8 strong steps straight down the field. Make it look like a Go.",
+      "On step 8, drop your hips and plant your INSIDE foot (the one closer to the middle).",
+      "Snap your head and shoulders toward the sideline and run straight at it.",
+      "Catch the ball facing the QB, then turn upfield. Stay in bounds!",
+    ],
+    tips: ["Sell the Go. The faster you run the first 8 steps, the more open you'll be.", "Cut flat. Don't drift deeper or float back.", "Know where the sideline is. Catch first, then worry about the line."],
+    mistakes: ["Slowing down before the cut. That tells the defender what's coming.", "Rounding the cut into a slow curve.", "Drifting out of bounds before the catch."],
+    beats: "Defenders playing deep or backing up. Near the sideline, only the receiver can get to a good throw. It's good on long yardage.",
+    qbTip: "Throw it as the receiver plants, toward the sideline, so only they can catch it.",
+  },
+  {
+    id: "curl", name: "Curl",
+    summary: "Run 6 steps, stop fast, turn back to face the QB, and come back toward the ball.",
+    start: [22, -0.6], path: [[22, 6.5], [21.2, 5.2, 0.6]], throwAt: 0.95,
+    marks: [{ at: [22, 6.5], label: "Step 6: stop & turn", side: "left" }],
+    steps: [
+      "Line up where the play shows you.",
+      "Run 6 hard steps straight ahead, like it's a Go.",
+      "On step 6, drop your hips and stop as fast as you can.",
+      "Turn toward the inside (toward the QB), not the sideline.",
+      "Come back 1–2 steps toward the QB with your hands up. Catch, turn, run.",
+    ],
+    tips: ["The harder you run the first 6 steps, the more room you'll have when you stop.", "Stop on a dime. Short, choppy steps into the stop.", "Always come back to the ball. Defenders are behind you."],
+    mistakes: ["Drifting slowly into the stop. The defender catches up.", "Turning toward the sideline instead of the QB.", "Standing still waiting for the ball."],
+    beats: "Defenders who back up because they're scared of the Go. Against a zone, stop in the open space between two defenders.",
+    qbTip: "Throw as the receiver stops and turns, right at their chest.",
+  },
+  {
+    id: "go", name: "Go",
+    summary: "Sprint straight down the field as fast as you can. Look back for the ball after about 10 steps.",
+    start: [24, -0.6], path: [[24, 19]], throwAt: 1.0,
+    marks: [{ at: [24, 10], label: "Look for the ball", side: "left" }],
+    steps: [
+      "Line up where the play shows you. Leave 2–3 yards between you and the sideline.",
+      "Explode off the line and run full speed, straight ahead.",
+      "Stay on your line. Don't drift toward the middle or the sideline.",
+      "After about 10 steps, look over your inside shoulder for the ball without slowing down.",
+      "Track the ball into your hands and keep running to the end zone.",
+    ],
+    tips: ["Full speed the whole way. Slowing down to look kills the play.", "Even if the ball isn't coming, a hard Go pulls defenders deep and opens space for teammates.", "Catch it with your hands, pinkies together for a ball over your shoulder."],
+    mistakes: ["Slowing down or looking back too early.", "Drifting toward the sideline and running out of room.", "Jogging when you're not the target. Defenders notice."],
+    beats: "Defenders playing too close to you, or man defense without a deep safety. Even when it's not thrown, it makes room for short routes.",
+    qbTip: "Throw it deep and out in front. Let the receiver run under it, never make them stop.",
+  },
+];

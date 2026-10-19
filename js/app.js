@@ -1,4 +1,4 @@
-import { POSITIONS, OFFENSE_IDS, DEFENSE_IDS, ROUTES, SITUATIONS, GLOSSARY, GROUPS } from "./data.js";
+import { POSITIONS, OFFENSE_IDS, DEFENSE_IDS, POSITION_GROUPS, ROUTE_LESSONS, SITUATIONS, GLOSSARY, GROUPS } from "./data.js";
 import { state, init, save, cloud, canEdit, login, logout, setMe, setLocalCoach, resetToDefault, bus } from "./store.js";
 import { drawPlay, Animator, posInfo } from "./field.js";
 import { mountEditor, newPlay } from "./editor.js";
@@ -55,8 +55,12 @@ function labelFor(play, id) {
 }
 
 function routeLink(rid) {
-  const r = ROUTES.find((x) => x.id === rid);
-  return r ? `<a class="route-link" href="#/learn/routes/${r.id}">${esc(r.name)} route ›</a>` : "";
+  const r = ROUTE_LESSONS.find((x) => x.id === rid);
+  return r ? `<a class="route-link" href="#/learn/routes/${r.id}">How to run a ${esc(r.name)} ›</a>` : "";
+}
+
+function groupOf(posId) {
+  return POSITION_GROUPS.find((g) => g.ids.includes(posId));
 }
 
 function renderMeChip() {
@@ -272,7 +276,7 @@ function renderPlay(id) {
       <p class="muted small">${esc(labelFor(play, selected))}${names.length ? " · " + esc(names.join(", ")) : ""}</p>
       <p class="job-text">${esc(p.note || "No instructions yet.")}</p>
       ${p.route ? routeLink(p.route) : ""}
-      <a class="route-link" href="#/learn/positions#${selected}">About this position ›</a>`;
+      <a class="route-link" href="#/learn/positions#${groupOf(selected)?.id || ""}">About this position ›</a>`;
   }
 
   function drawAssign() {
@@ -333,59 +337,135 @@ function renderLearn(sub, extra) {
     <div class="page-head"><h1>Learn</h1><p class="lede">New to football? Start here. Everything is explained in plain words.</p></div>
     <div class="learn-grid">
       <a class="learn-card" href="#/learn/rules"><strong>Rules &amp; words</strong><span>How our games work, plus a glossary of football terms.</span></a>
-      <a class="learn-card" href="#/learn/positions"><strong>Positions</strong><span>What each spot does on offense and defense, and who plays it.</span></a>
-      <a class="learn-card" href="#/learn/routes"><strong>Routes</strong><span>The paths receivers run, animated, with step-by-step directions.</span></a>
+      <a class="learn-card" href="#/learn/positions"><strong>Positions</strong><span>The main jobs on offense and defense, and who plays them.</span></a>
+      <a class="learn-card" href="#/learn/routes"><strong>Routes</strong><span>Slant, Out, Curl and Go, step by step with animations.</span></a>
       <a class="learn-card" href="#/gameday"><strong>Game Day</strong><span>Which play to call in each situation.</span></a>
     </div>`;
 }
 
 function renderPositions() {
-  const section = (ids, title) => `
+  const section = (side, title) => `
     <h2 class="section-title">${title}</h2>
     <div class="pos-grid">
-      ${ids.map((id) => {
-        const p = POSITIONS[id];
-        const names = namesAt(id, p.side);
-        const isMe = myPos(p.side) === id;
-        return `<article class="card pos-card ${isMe ? "is-me" : ""}" id="${id}">
-          <h3>${dot(id, true)}${esc(p.name)}${isMe ? ` <span class="pill">You</span>` : ""}</h3>
-          <p>${esc(p.job)}</p>
-          <ul class="tips">${p.tips.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>
-          <p class="muted small"><strong>Good fit:</strong> ${esc(p.good)}</p>
+      ${POSITION_GROUPS.filter((g) => g.side === side).map((g) => {
+        const names = g.ids.flatMap((id) => namesAt(id, side));
+        const isMe = g.ids.includes(myPos(side));
+        return `<article class="card pos-card ${isMe ? "is-me" : ""}" id="${g.id}">
+          <h3><span class="dots">${g.ids.map((id) => dot(id, true)).join("")}</span>${esc(g.name)}${isMe ? ` <span class="pill">You</span>` : ""}</h3>
+          <p>${esc(g.job)}</p>
+          <ul class="tips">${g.tips.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>
+          <p class="muted small"><strong>Good fit:</strong> ${esc(g.good)}</p>
           ${names.length ? `<p class="small"><strong>Playing here:</strong> ${esc(names.join(", "))}</p>` : ""}
+          ${g.routesLink ? `<a class="route-link" href="#/learn/routes">Learn the routes ›</a>` : ""}
         </article>`;
       }).join("")}
     </div>`;
   view.innerHTML = `
     <div class="page-head"><a class="back" href="#/learn">← Learn</a><h1>Positions</h1>
-    <p class="lede">Each position has the same color in every play diagram.</p></div>
-    ${section(OFFENSE_IDS, "Offense")}
-    ${section(DEFENSE_IDS, "Defense")}`;
+    <p class="lede">These are the main jobs. In the play diagrams, each player has their own color so you can find your spot and your route.</p></div>
+    ${section("offense", "Offense")}
+    ${section("defense", "Defense")}`;
   const target = location.hash.split("#")[2];
   if (target) document.getElementById(target)?.scrollIntoView();
 }
 
-function renderRoutes(focus) {
+function routeDemo(r, withQb) {
+  const players = [{ id: "RS", start: r.start, path: r.path, kind: "route" }];
+  if (!withQb) return { players };
+  return {
+    players: [{ id: "QB", start: [15, -4.5], path: [], kind: "carry" }, ...players],
+    ball: { type: "pass", to: "RS", at: r.throwAt },
+    marks: r.marks,
+  };
+}
+
+function renderRoutes(id) {
+  if (id) return renderRouteLesson(id);
   view.innerHTML = `
     <div class="page-head"><a class="back" href="#/learn">← Learn</a><h1>Routes</h1>
-    <p class="lede">A route is the path you run. Tap any route to replay it.</p></div>
+    <p class="lede">A route is the path you run. Every play tells you which route is yours, so learn these four first. Tap one to learn it step by step.</p></div>
     <div class="route-grid">
-      ${ROUTES.map((r) => `
-        <article class="card route-card ${r.id === focus ? "focus" : ""}" id="route-${r.id}">
+      ${ROUTE_LESSONS.map((r) => `
+        <a class="card route-card" href="#/learn/routes/${r.id}">
           <svg class="route-svg" data-route="${r.id}" role="img" aria-label="${esc(r.name)} route animation"></svg>
-          <div><h3>${esc(r.name)}</h3><p>${esc(r.steps)}</p><p class="muted small">${esc(r.use)}</p></div>
-        </article>`).join("")}
-    </div>`;
+          <div><h3>${esc(r.name)}</h3><p>${esc(r.summary)}</p><span class="route-link">Learn it ›</span></div>
+        </a>`).join("")}
+    </div>
+    <p class="muted small">More routes will be added as the team learns them.</p>`;
   for (const svg of view.querySelectorAll("svg[data-route]")) {
-    const r = ROUTES.find((x) => x.id === svg.dataset.route);
-    const demo = { players: [{ id: "RS", start: r.start, path: r.path, kind: r.kind || "route" }], ghosts: r.ghosts || [] };
-    const a = new Animator(svg, demo, { loop: !reduceMotion });
+    const r = ROUTE_LESSONS.find((x) => x.id === svg.dataset.route);
+    const a = new Animator(svg, routeDemo(r, false), { loop: !reduceMotion });
     a.speed = 0.8;
     if (!reduceMotion) a.start(); else a.setTime(a.tl.tMax);
-    svg.closest(".route-card").addEventListener("click", () => { a.setTime(a.tl.tMin); a.start(); });
     onLeave(() => a.destroy());
   }
-  if (focus) document.getElementById("route-" + focus)?.scrollIntoView({ block: "center" });
+}
+
+function renderRouteLesson(id) {
+  const i = ROUTE_LESSONS.findIndex((r) => r.id === id);
+  if (i < 0) { location.hash = "#/learn/routes"; return; }
+  const r = ROUTE_LESSONS[i];
+  const prev = ROUTE_LESSONS[i - 1], next = ROUTE_LESSONS[i + 1];
+  const usedIn = state.playbook.plays.filter((p) => p.players.some((x) => x.route === r.id));
+  const list = (items) => items.map((t) => `<li>${esc(t)}</li>`).join("");
+
+  view.innerHTML = `
+    <div class="page-head">
+      <a class="back" href="#/learn/routes">← Routes</a>
+      <h1>${esc(r.name)}</h1>
+      <p class="lede">${esc(r.summary)}</p>
+    </div>
+    <div class="play-layout">
+      <section class="card field-card">
+        <svg id="field" class="field-svg" role="img" aria-label="${esc(r.name)} route animation"></svg>
+        <div class="controls">
+          <button type="button" class="btn icon" id="pp" aria-label="Pause">❚❚</button>
+          <span class="muted small grow">Watch when the ball comes: that's your timing.</span>
+          <button type="button" class="btn small" id="spd">Slow</button>
+        </div>
+        <p class="status" id="status" aria-live="polite"></p>
+      </section>
+      <aside class="play-side">
+        <section class="card"><h2>Step by step</h2><ol class="steps">${list(r.steps)}</ol></section>
+        <section class="card">
+          <h2>Coaching tips</h2><ul class="tips">${list(r.tips)}</ul>
+          <h3>Common mistakes</h3><ul class="tips">${list(r.mistakes)}</ul>
+        </section>
+        <section class="card">
+          <h2>Why it works</h2><p>${esc(r.beats)}</p>
+          <h3>For the QB</h3><p>${esc(r.qbTip)}</p>
+        </section>
+        <section class="card">
+          <h2>Plays that use it</h2>
+          ${usedIn.length
+            ? `<div class="call-plays">${usedIn.map((p) => `<a class="call-btn" href="#/play/${p.id}">${esc(p.name)}</a>`).join("")}</div>`
+            : `<p class="muted">No plays use this route yet.</p>`}
+        </section>
+      </aside>
+    </div>
+    <nav class="lesson-nav" aria-label="More routes">
+      ${prev ? `<a class="btn" href="#/learn/routes/${prev.id}">← ${esc(prev.name)}</a>` : "<span></span>"}
+      ${next ? `<a class="btn" href="#/learn/routes/${next.id}">${esc(next.name)} →</a>` : "<span></span>"}
+    </nav>`;
+
+  let a = null;
+  a = new Animator($("#field"), routeDemo(r, true), {
+    loop: !reduceMotion,
+    highlight: "RS",
+    onTick: (t, label) => { if (a) $("#status").textContent = label; },
+  });
+  a.speed = 0.75;
+  onLeave(() => a.destroy());
+  const pp = $("#pp");
+  const setBtn = () => { pp.textContent = a.playing ? "❚❚" : "▶"; pp.setAttribute("aria-label", a.playing ? "Pause" : "Play"); };
+  if (!reduceMotion) a.start(); else a.setTime(a.tl.tMax);
+  setBtn();
+  a.opts.onEnd = setBtn;
+  pp.addEventListener("click", () => { if (a.playing) a.pause(); else a.start(); setBtn(); });
+  $("#spd").addEventListener("click", (e) => {
+    a.speed = a.speed === 0.75 ? 0.35 : 0.75;
+    e.target.textContent = a.speed === 0.75 ? "Slow" : "Normal";
+  });
 }
 
 function renderRules() {
