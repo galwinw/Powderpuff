@@ -28,11 +28,16 @@ function rosterPlayer(id) {
   return state.roster.players.find((p) => p.id === id);
 }
 
+// Special plays use the offense positions.
+const posSide = (side) => (side === "defense" ? "defense" : "offense");
+const TAB_FOR = { offense: "plays", special: "special", defense: "defense" };
+const SIDE_TITLE = { offense: "Offense", special: "Special Plays", defense: "Defense" };
+
 function myPos(side) {
   const me = state.me;
   if (!me) return null;
   const src = me.playerId ? rosterPlayer(me.playerId) || me : me;
-  return side === "offense" ? src.offense || null : src.defense || null;
+  return posSide(side) === "offense" ? src.offense || null : src.defense || null;
 }
 
 function myName() {
@@ -43,7 +48,7 @@ function myName() {
 }
 
 function namesAt(pos, side) {
-  return state.roster.players.filter((p) => (side === "offense" ? p.offense : p.defense) === pos).map((p) => p.name);
+  return state.roster.players.filter((p) => (posSide(side) === "offense" ? p.offense : p.defense) === pos).map((p) => p.name);
 }
 
 function dot(id, big = false) {
@@ -78,8 +83,8 @@ function setActiveTab(page) {
   if (page === "play" || page === "edit") {
     const id = location.hash.split("/")[2];
     const p = state.playbook.plays.find((x) => x.id === id);
-    tab = p?.side === "defense" ? "defense" : "plays";
-    if (id === "new-defense") tab = "defense";
+    tab = TAB_FOR[p?.side] || "plays";
+    if (id?.startsWith("new-")) tab = TAB_FOR[id.slice(4)] || "plays";
   }
   for (const a of document.querySelectorAll(".tabs a")) a.classList.toggle("on", a.dataset.tab === tab);
 }
@@ -134,12 +139,14 @@ function renderPlays(side) {
 
   view.innerHTML = `
     <div class="page-head">
-      <h1>${side === "offense" ? "Offense" : "Defense"}</h1>
-      <p class="lede">${side === "offense"
-        ? "Tap a play to watch it run. Every play uses the same formation, so you always line up in the same spot."
-        : "We use two defenses. Tap one to see where you go."}</p>
+      <h1>${SIDE_TITLE[side]}</h1>
+      <p class="lede">${{
+        offense: "Our everyday plays. Tap one to watch it run. Every play uses the same formation, so you always line up in the same spot.",
+        special: "Trick plays, blitz beaters and the QB sneak. Use them when the situation calls for it. They work best when the defense doesn't expect them.",
+        defense: "We use two defenses. Tap one to see where you go.",
+      }[side]}</p>
     </div>
-    ${!mine ? `<button type="button" class="banner" id="who">${state.me ? "Pick your " + side + " position" : "Tell us who you are"} to see your job highlighted in every play →</button>` : ""}
+    ${!mine ? `<button type="button" class="banner" id="who">${state.me ? "Pick your " + posSide(side) + " position" : "Tell us who you are"} to see your job highlighted in every play →</button>` : ""}
     <div class="chips" role="group" aria-label="Filter plays">
       ${["All", ...groups].map((g) => `<button type="button" class="chip ${g === filter ? "on" : ""}" data-filter="${g}">${g}</button>`).join("")}
     </div>
@@ -188,7 +195,7 @@ function renderPlay(id) {
 
   view.innerHTML = `
     <div class="page-head">
-      <a class="back" href="#/${side === "offense" ? "plays" : "defense"}">← ${side === "offense" ? "Offense" : "Defense"}</a>
+      <a class="back" href="#/${TAB_FOR[side]}">← ${SIDE_TITLE[side]}</a>
       <div class="row between wrap">
         <h1>${esc(play.name)}</h1>
         ${canEdit() ? `<a class="btn small" href="#/edit/${play.id}">Edit play</a>` : ""}
@@ -208,7 +215,7 @@ function renderPlay(id) {
         <ul class="legend">
           <li><b>Blue line</b> = line of scrimmage</li>
           <li><b>→</b> run this way</li>
-          ${side === "offense" ? `<li><b>⊥</b> block here</li>` : `<li><b>- - →</b> rush / follow</li><li><b>Shaded area</b> = your zone</li>`}
+          ${side !== "defense" ? `<li><b>⊥</b> block here</li><li><b class="ball-key">· · ·</b> ball (pass or pitch)</li>` : `<li><b>- - →</b> rush / follow</li><li><b>Shaded area</b> = your zone</li>`}
         </ul>
       </section>
       <aside class="play-side">
@@ -299,10 +306,10 @@ function renderPlay(id) {
 // ---------- Editor ----------
 function renderEdit(id) {
   if (!canEdit()) { view.innerHTML = `<p class="empty">Only coaches can edit plays. <a href="#/team">Coach login</a></p>`; return; }
-  const isNew = id === "new-offense" || id === "new-defense";
-  const play = isNew ? newPlay(id === "new-offense" ? "offense" : "defense") : state.playbook.plays.find((p) => p.id === id);
+  const isNew = ["new-offense", "new-special", "new-defense"].includes(id);
+  const play = isNew ? newPlay(id.slice(4)) : state.playbook.plays.find((p) => p.id === id);
   if (!play) { view.innerHTML = `<p class="empty">Play not found.</p>`; return; }
-  const back = () => { location.hash = isNew ? (play.side === "offense" ? "#/plays" : "#/defense") : `#/play/${play.id}`; };
+  const back = () => { location.hash = isNew ? `#/${TAB_FOR[play.side]}` : `#/play/${play.id}`; };
   const ed = mountEditor(view, play, {
     isNew,
     onCancel: back,
@@ -322,7 +329,7 @@ function renderEdit(id) {
       try { await save("playbook"); }
       catch (e) { state.playbook = before; toast("Couldn't delete: " + e.message); return; }
       toast("Play deleted.");
-      location.hash = p.side === "offense" ? "#/plays" : "#/defense";
+      location.hash = `#/${TAB_FOR[p.side]}`;
     },
   });
   onLeave(() => ed.destroy());
@@ -490,10 +497,10 @@ function renderGameDay() {
   const saveGd = () => { try { sessionStorage.setItem("gameday", JSON.stringify(gd)); } catch { /* ignore */ } };
 
   const callList = (side) => SITUATIONS.filter((s) => s.side === side).map((s) => {
-    const ps = plays(side).filter((p) => p.situations?.includes(s.id));
+    const ps = state.playbook.plays.filter((p) => posSide(p.side) === side && p.situations?.includes(s.id));
     return `<div class="call">
       <div><strong>${esc(s.label)}</strong><span class="muted small">${esc(s.hint)}</span></div>
-      <div class="call-plays">${ps.length ? ps.map((p) => `<a class="call-btn" href="#/play/${p.id}">${esc(p.name)}</a>`).join("") : `<span class="muted small">No play tagged yet</span>`}</div>
+      <div class="call-plays">${ps.length ? ps.map((p) => `<a class="call-btn ${p.side === "special" ? "special" : ""}" href="#/play/${p.id}">${p.side === "special" ? "★ " : ""}${esc(p.name)}</a>`).join("") : `<span class="muted small">No play tagged yet</span>`}</div>
     </div>`;
   }).join("");
 
@@ -660,6 +667,7 @@ function route() {
   setActiveTab(page);
   switch (page) {
     case "plays": renderPlays("offense"); break;
+    case "special": renderPlays("special"); break;
     case "defense": renderPlays("defense"); break;
     case "play": renderPlay(arg); break;
     case "edit": renderEdit(arg); break;

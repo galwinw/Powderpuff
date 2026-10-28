@@ -3,8 +3,9 @@ import { POSITIONS } from "./data.js";
 
 export const FIELD = { w: 30, top: 22, bottom: -8 };
 const NS = "http://www.w3.org/2000/svg";
-const SPEED = { route: 6, man: 5.5, zone: 3, rush: 6, block: 2.5, blockRelease: 6, carry: 2.5 };
-const BALL_SPEED = 16; // yards per second
+const SPEED = { route: 6, routeBlock: 6, man: 5.5, zone: 3, rush: 6, block: 2.5, blockRelease: 6, carry: 2.5 };
+const BALL_SPEED = { pass: 16, pitch: 9 }; // yards per second
+const BALL_LABEL = { pass: "Pass!", pitch: "Pitch!" };
 
 const sy = (y) => FIELD.top - y;
 
@@ -73,7 +74,7 @@ function drawRoute(parent, p, color, thumb) {
   if (dash) attrs["stroke-dasharray"] = dash;
   el("polyline", attrs, parent);
   const n = pts.length;
-  if (kind === "block") {
+  if (kind === "block" || kind === "routeBlock") {
     tBar(parent, pts[n - 2], pts[n - 1], color, w);
   } else if (kind === "blockRelease") {
     tBar(parent, pts[0], pts[1], color, w);
@@ -117,6 +118,13 @@ export function drawPlay(svg, play, { highlight = null, thumb = false, onPlayer 
   for (const p of play.players) {
     const g = el("g", { opacity: dim(p.id) ? 0.22 : 1 }, routes);
     drawRoute(g, p, posInfo(p.id).color, thumb);
+  }
+  if (play.ball) {
+    const tl = buildTimeline(play);
+    for (const ev of tl.events) {
+      const to = tl.pos(ev.to, ev.t1);
+      el("line", { x1: ev.from[0], y1: sy(ev.from[1]), x2: to[0], y2: sy(to[1]), class: "ball-path" + (thumb ? " thumb" : ""), opacity: highlight ? 0.5 : 1 }, routes);
+    }
   }
   for (const m of play.marks || []) {
     const g = el("g", {}, routes);
@@ -170,56 +178,72 @@ function posAt(tl, t) {
   return tl.last;
 }
 
+// A play's ball moves, in order. Older plays stored a single { type, to, at }.
+export function ballEvents(play) {
+  const b = play.ball;
+  if (!b) return [];
+  if (Array.isArray(b.events)) return b.events;
+  if (b.type === "pass" || b.type === "pitch") return [{ type: b.type, to: b.to, at: b.at }];
+  if (b.type === "handoff") return [{ type: "pitch", to: b.to, at: b.at }];
+  return [];
+}
+
 export function buildTimeline(play) {
   const tls = {};
   for (const p of play.players) tls[p.id] = timeline(p);
   const pos = (id, t) => (tls[id] ? posAt(tls[id], t) : null);
-  const b = play.ball;
-  let pass = null;
-  if (b && b.type === "pass" && tls[b.to] && tls.QB) {
-    const from = pos("QB", b.at);
-    let T = 0.8;
-    for (let i = 0; i < 5; i++) {
-      const to = pos(b.to, b.at + T);
-      T = Math.max(0.3, Math.hypot(to[0] - from[0], to[1] - from[1]) / BALL_SPEED);
+  const hasBall = Boolean(play.ball && tls.QB);
+
+  // Work out each throw: who has it, where it goes, how long it's in the air.
+  const events = [];
+  if (hasBall) {
+    let holder = "QB", ready = 0.3;
+    for (const ev of ballEvents(play)) {
+      if (!tls[ev.to] || ev.to === holder) continue;
+      const t0 = Math.max(ev.at, ready);
+      const from = pos(holder, t0);
+      const speed = BALL_SPEED[ev.type] || BALL_SPEED.pass;
+      let T = 0.6;
+      for (let i = 0; i < 5; i++) {
+        const to = pos(ev.to, t0 + T);
+        T = Math.max(0.25, Math.hypot(to[0] - from[0], to[1] - from[1]) / speed);
+      }
+      events.push({ ...ev, from, by: holder, t0, t1: t0 + T });
+      holder = ev.to;
+      ready = t0 + T + 0.1;
     }
-    pass = { t0: b.at, t1: b.at + T, from };
   }
+
   let tMin = 0, tMax = 0;
   for (const id in tls) { tMin = Math.min(tMin, tls[id].start); tMax = Math.max(tMax, tls[id].end); }
-  if (pass) tMax = Math.max(tMax, pass.t1 + 0.4);
+  if (events.length) tMax = Math.max(tMax, events[events.length - 1].t1 + 0.4);
   tMin -= 0.6;
   tMax += 0.6;
 
   function ball(t) {
-    if (!b || !tls.QB) return null;
+    if (!hasBall) return null;
     const c0 = tls.C ? [tls.C.first[0], tls.C.first[1] + 0.6] : tls.QB.first;
     if (t < 0) return { p: c0, air: 0, label: "Set…" };
     if (t < 0.3) {
       const q = pos("QB", t), k = t / 0.3;
       return { p: [c0[0] + (q[0] - c0[0]) * k, c0[1] + (q[1] - c0[1]) * k], air: 0.3, label: "Hike!" };
     }
-    if (b.type === "keep" || t < (b.at ?? 0)) return { p: pos("QB", t), air: 0, label: b.type === "keep" && t > 1.2 ? "QB run!" : "Hike!" };
-    if (b.type === "handoff") {
-      const r = pos(b.to, t);
-      if (t < b.at + 0.15) {
-        const q = pos("QB", b.at), k = (t - b.at) / 0.15;
-        return { p: [q[0] + (r[0] - q[0]) * k, q[1] + (r[1] - q[1]) * k], air: 0, label: "Handoff!" };
+    let holder = "QB", label = events.length ? "Hike!" : t > 0.8 ? "QB run!" : "Hike!";
+    for (const ev of events) {
+      if (t < ev.t0) break;
+      if (t < ev.t1) {
+        const k = (t - ev.t0) / (ev.t1 - ev.t0);
+        const to = pos(ev.to, ev.t1);
+        const arc = ev.type === "pass" ? 1 : 0.35;
+        return { p: [ev.from[0] + (to[0] - ev.from[0]) * k, ev.from[1] + (to[1] - ev.from[1]) * k], air: Math.sin(Math.PI * k) * arc, label: BALL_LABEL[ev.type] || "Pass!" };
       }
-      return { p: r, air: 0, label: "Handoff!" };
+      holder = ev.to;
+      label = "Caught!";
     }
-    if (b.type === "pass" && pass) {
-      if (t < pass.t1) {
-        const k = (t - pass.t0) / (pass.t1 - pass.t0);
-        const to = pos(b.to, pass.t1);
-        return { p: [pass.from[0] + (to[0] - pass.from[0]) * k, pass.from[1] + (to[1] - pass.from[1]) * k], air: Math.sin(Math.PI * k), label: "Pass!" };
-      }
-      return { p: pos(b.to, t), air: 0, label: "Caught!" };
-    }
-    return { p: pos("QB", t), air: 0, label: "" };
+    return { p: pos(holder, t), air: 0, label };
   }
 
-  return { tMin, tMax, pos, ball };
+  return { tMin, tMax, pos, ball, events };
 }
 
 // ---------- Animator ----------

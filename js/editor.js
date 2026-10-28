@@ -1,26 +1,30 @@
 // Coach play editor: move players, draw routes by tapping, write each player's job.
 import { POSITIONS, ROUTES, GROUPS, SITUATIONS, OFFENSE_IDS, DEFENSE_IDS, OFFENSE_TEMPLATE, DEFENSE_TEMPLATE } from "./data.js";
-import { drawPlay, Animator, eventToField, FIELD, posInfo } from "./field.js";
+import { drawPlay, Animator, eventToField, FIELD, posInfo, ballEvents } from "./field.js";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const snap = (v) => Math.round(v * 2) / 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 const KINDS = {
-  offense: [["route", "Route (runs a path)"], ["block", "Block"], ["blockRelease", "Block, then release"], ["carry", "QB / ball carrier"]],
+  offense: [["route", "Route (runs a path)"], ["routeBlock", "Run, then block for the runner"], ["block", "Block"], ["blockRelease", "Block, then release"], ["carry", "QB / ball carrier"]],
   defense: [["rush", "Rush the QB"], ["zone", "Guard a zone"], ["man", "Follow a player (man)"]],
 };
 
+const TAB_FOR = { offense: "plays", special: "special", defense: "defense" };
+const BALL_TYPES = [["pass", "Pass"], ["pitch", "Pitch (toss back/sideways)"]];
+
 export function newPlay(side) {
-  const ids = side === "offense" ? OFFENSE_IDS : DEFENSE_IDS;
-  const tpl = side === "offense" ? OFFENSE_TEMPLATE : DEFENSE_TEMPLATE;
+  const isOff = side !== "defense";
+  const ids = isOff ? OFFENSE_IDS : DEFENSE_IDS;
+  const tpl = isOff ? OFFENSE_TEMPLATE : DEFENSE_TEMPLATE;
   const kindFor = (id) => side === "defense"
     ? (id === "RC" || id === "RQ" ? "rush" : "zone")
     : id === "QB" ? "carry" : id === "C" || id === "RB" ? "block" : "route";
   const play = {
     id: "play-" + Math.random().toString(36).slice(2, 8),
     side, name: "", group: GROUPS[side][0], situations: [], summary: "", why: "", qbRead: "",
-    ball: side === "offense" ? { type: "pass", to: "RW", at: 1.2 } : null,
+    ball: isOff ? { events: [{ type: "pass", to: "RW", at: 1.2 }] } : null,
     players: ids.map((id) => ({ id, start: [...tpl[id]], path: [], kind: kindFor(id), note: "" })),
   };
   if (side === "defense") {
@@ -32,6 +36,8 @@ export function newPlay(side) {
 export function mountEditor(root, original, { onSave, onCancel, onDelete, isNew }) {
   const play = structuredClone(original);
   const side = play.side;
+  const isOff = side !== "defense";
+  let events = structuredClone(ballEvents(play));
   let sel = play.players[0].id;
   let mode = "route"; // "route" = tap field to add points, "move" = drag players
   let anim = null;
@@ -39,7 +45,7 @@ export function mountEditor(root, original, { onSave, onCancel, onDelete, isNew 
 
   root.innerHTML = `
     <div class="page-head">
-      <a class="back" href="#/${side === "offense" ? "plays" : "defense"}">← Back</a>
+      <a class="back" href="#/${TAB_FOR[side]}">← Back</a>
       <h1>${isNew ? "New play" : "Edit play"}</h1>
     </div>
     <div class="editor">
@@ -66,21 +72,15 @@ export function mountEditor(root, original, { onSave, onCancel, onDelete, isNew 
         <label class="field">Type<select id="ed-group">${GROUPS[side].map((g) => `<option ${g === play.group ? "selected" : ""}>${g}</option>`).join("")}</select></label>
         <label class="field">When to use it (one line)<input id="ed-summary" maxlength="140" value="${esc(play.summary)}"></label>
         <label class="field">Why it works<textarea id="ed-why" rows="3">${esc(play.why)}</textarea></label>
-        ${side === "offense" ? `<label class="field">QB's reads<textarea id="ed-qb" rows="2">${esc(play.qbRead)}</textarea></label>` : ""}
+        ${isOff ? `<label class="field">QB's reads<textarea id="ed-qb" rows="2">${esc(play.qbRead)}</textarea></label>` : ""}
         <fieldset class="field"><legend>Game Day situations</legend>
-          ${SITUATIONS.filter((s) => s.side === side).map((s) => `<label class="check"><input type="checkbox" value="${s.id}" ${play.situations?.includes(s.id) ? "checked" : ""}> ${esc(s.label)}</label>`).join("")}
+          ${SITUATIONS.filter((s) => s.side === (isOff ? "offense" : "defense")).map((s) => `<label class="check"><input type="checkbox" value="${s.id}" ${play.situations?.includes(s.id) ? "checked" : ""}> ${esc(s.label)}</label>`).join("")}
         </fieldset>
-        ${side === "offense" ? `
-        <fieldset class="field"><legend>The ball</legend>
-          <div class="row wrap">
-            <label class="field inline">What happens<select id="ed-ball-type">
-              ${[["pass", "Pass"], ["handoff", "Handoff"], ["keep", "QB keeps it"]].map(([v, l]) => `<option value="${v}" ${play.ball?.type === v ? "selected" : ""}>${l}</option>`).join("")}
-            </select></label>
-            <label class="field inline" id="ed-ball-to-wrap">To<select id="ed-ball-to">
-              ${OFFENSE_IDS.filter((id) => id !== "QB").map((id) => `<option value="${id}" ${play.ball?.to === id ? "selected" : ""}>${esc(POSITIONS[id].name)}</option>`).join("")}
-            </select></label>
-            <label class="field inline" id="ed-ball-at-wrap">After (seconds)<input id="ed-ball-at" type="number" min="0.3" max="5" step="0.1" value="${play.ball?.at ?? 1.2}"></label>
-          </div>
+        ${isOff ? `
+        <fieldset class="field"><legend>The ball, in order</legend>
+          <p class="muted small">Add each pass or pitch in the order it happens. No passes or pitches means the QB runs with it. Only one forward pass per play.</p>
+          <div id="ed-ball" class="ball-rows"></div>
+          <button type="button" class="btn small" id="ed-ball-add">+ Add a pass or pitch</button>
         </fieldset>` : ""}
       </section>
 
@@ -120,8 +120,8 @@ export function mountEditor(root, original, { onSave, onCancel, onDelete, isNew 
     const last = p.path[p.path.length - 1];
     $("#ed-player").innerHTML = `
       <h2><span class="dot big" style="background:${info.color}"></span>${esc(p.label || info.name)}</h2>
-      <label class="field">Assignment<select id="ed-kind">${KINDS[side].map(([v, l]) => `<option value="${v}" ${p.kind === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
-      ${side === "offense" ? `<label class="field">Route name (links to the route guide)<select id="ed-route"><option value="">None</option>${ROUTES.map((r) => `<option value="${r.id}" ${p.route === r.id ? "selected" : ""}>${esc(r.name)}</option>`).join("")}</select></label>` : ""}
+      <label class="field">Assignment<select id="ed-kind">${KINDS[isOff ? "offense" : "defense"].map(([v, l]) => `<option value="${v}" ${p.kind === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+      ${isOff ? `<label class="field">Route name (links to the route guide)<select id="ed-route"><option value="">None</option>${ROUTES.map((r) => `<option value="${r.id}" ${p.route === r.id ? "selected" : ""}>${esc(r.name)}</option>`).join("")}</select></label>` : ""}
       <label class="field">Their job, in plain words<textarea id="ed-note" rows="3" placeholder="e.g. Run 5 steps, then cut toward the middle.">${esc(p.note)}</textarea></label>
       <div class="row wrap">
         <label class="field inline">Pause at last point (sec)<input id="ed-wait" type="number" min="0" max="5" step="0.1" value="${last?.[2] ?? 0}" ${last ? "" : "disabled"}></label>
@@ -214,25 +214,48 @@ export function mountEditor(root, original, { onSave, onCancel, onDelete, isNew 
     anim.start();
   });
 
-  function syncBallFields() {
-    const t = $("#ed-ball-type")?.value;
-    if (!t) return;
-    $("#ed-ball-to-wrap").hidden = t === "keep";
-    $("#ed-ball-at-wrap").hidden = t === "keep";
+  function renderBall() {
+    const box = $("#ed-ball");
+    if (!box) return;
+    const holderBefore = (i) => (i === 0 ? "QB" : events[i - 1].to);
+    box.innerHTML = events.length ? events.map((ev, i) => `
+      <div class="ball-row" data-i="${i}">
+        <span class="ball-num">${i + 1}</span>
+        <span class="muted small">${esc(posInfo(holderBefore(i)).name)}</span>
+        <label class="field inline">Type<select data-k="type">${BALL_TYPES.map(([v, l]) => `<option value="${v}" ${ev.type === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+        <label class="field inline">To<select data-k="to">${OFFENSE_IDS.map((id) => `<option value="${id}" ${ev.to === id ? "selected" : ""}>${esc(POSITIONS[id].name)}</option>`).join("")}</select></label>
+        <label class="field inline">At (seconds)<input data-k="at" type="number" min="0.3" max="6" step="0.1" value="${ev.at}"></label>
+        <button type="button" class="btn small danger" data-remove-ev="${i}" aria-label="Remove this step">✕</button>
+      </div>`).join("") : `<p class="muted small">The QB keeps it and runs.</p>`;
   }
-  $("#ed-ball-type")?.addEventListener("change", syncBallFields);
+  $("#ed-ball")?.addEventListener("change", (e) => {
+    const row = e.target.closest("[data-i]");
+    if (!row) return;
+    const ev = events[Number(row.dataset.i)];
+    const k = e.target.dataset.k;
+    ev[k] = k === "at" ? clamp(Number(e.target.value) || 1, 0.3, 6) : e.target.value;
+    renderBall();
+  });
+  $("#ed-ball")?.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-remove-ev]");
+    if (!b) return;
+    events.splice(Number(b.dataset.removeEv), 1);
+    renderBall();
+  });
+  $("#ed-ball-add")?.addEventListener("click", () => {
+    const last = events[events.length - 1];
+    events.push({ type: events.length ? "pitch" : "pass", to: "RW", at: last ? Math.round((last.at + 1) * 10) / 10 : 1.2 });
+    renderBall();
+  });
 
   function readMeta() {
     play.name = $("#ed-name").value.trim();
     play.group = $("#ed-group").value;
     play.summary = $("#ed-summary").value.trim();
     play.why = $("#ed-why").value.trim();
-    if (side === "offense") {
+    if (isOff) {
       play.qbRead = $("#ed-qb").value.trim();
-      const type = $("#ed-ball-type").value;
-      play.ball = type === "keep"
-        ? { type }
-        : { type, to: $("#ed-ball-to").value, at: clamp(Number($("#ed-ball-at").value) || 1, 0.3, 5) };
+      play.ball = { events: events.map((ev) => ({ type: ev.type, to: ev.to, at: ev.at })) };
     }
     play.situations = [...root.querySelectorAll("fieldset input[type=checkbox]:checked")].map((c) => c.value);
   }
@@ -257,7 +280,7 @@ export function mountEditor(root, original, { onSave, onCancel, onDelete, isNew 
     });
   }
 
-  syncBallFields();
+  renderBall();
   select(sel);
   return { destroy: () => anim?.destroy() };
 }

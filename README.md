@@ -8,12 +8,16 @@ Our flag football team's playbook app: animated plays, "my job" highlighting, po
 
 | Tab | What it does |
 |---|---|
-| **Offense / Defense** | Every play, animated. Tap a player to see their job in plain words. Pick "Who are you?" once and your role is highlighted in every play. |
+| **Offense / Special / Defense** | Every play, animated. Tap a player to see their job in plain words. Pick "Who are you?" once and your role is highlighted in every play. |
 | **Learn** | Rules, a glossary, every position explained, and an animated route guide. |
 | **Game Day** | Which play to call in each situation, plus a drive tracker (down, first downs, QB run used). |
 | **Team** | Roster with positions, team settings, and coach login. |
 
-The starter playbook has 6 offensive plays (Slant-Flat, Bubble Screen, Mesh, Flood, Jet Sweep, QB Draw) and 2 defenses (2-Rush Zone, Man + Safety), built around our rules: 7v7, two first downs per drive, one QB run per set of downs, up to 2 no-hands blockers and 2 rushers.
+The starter playbook is built around our rules: 7v7, two first downs per drive, one QB run per set of downs, no handoffs (pitches only), up to 2 no-hands blockers and 2 rushers, and anyone can block once the ball is caught or pitched.
+
+- **Offense (everyday):** Slant-Flat, Bubble Screen, Mesh, Flood, Jet Pitch, Toss Sweep
+- **Special:** Toss Bomb, Slip Screen, Center Pop, QB Sneak, Hook & Ladder
+- **Defense:** 2-Rush Zone, Man + Safety
 
 ## Turning on cloud saving for coaches (one time, about 10 minutes)
 
