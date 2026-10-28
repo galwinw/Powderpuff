@@ -215,7 +215,7 @@ function renderPlay(id) {
         <ul class="legend">
           <li><b>Blue line</b> = line of scrimmage</li>
           <li><b>→</b> run this way</li>
-          ${side !== "defense" ? `<li><b>⊥</b> block here</li><li><b class="ball-key">· · ·</b> ball (pass or pitch)</li>` : `<li><b>- - →</b> rush / follow</li><li><b>Shaded area</b> = your zone</li>`}
+          ${side !== "defense" ? `<li><b>⊥</b> block here</li><li><b class="ball-key">· · ·</b> ball (pass or pitch)</li>` : `<li><b>- - →</b> rush / follow</li><li><b>Shaded area</b> = the Middle's area</li>`}
         </ul>
       </section>
       <aside class="play-side">
@@ -516,8 +516,24 @@ function renderGameDay() {
       <p class="muted small">Getting a first down resets the down to 1 and makes the QB run available again.</p>
     </section>
     <section class="card"><h2>Offense: what to call</h2>${callList("offense")}</section>
-    <section class="card"><h2>Defense: what to call</h2>${callList("defense")}</section>`;
+    <section class="card tracker" id="d-tracker">
+      <h2>Defense: what to call</h2>
+      <div class="row wrap">
+        <span class="muted small">Our blitz this set</span>
+        <button type="button" class="qb-run ${gd.blitz ? "used" : ""}" id="blitz">${gd.blitz ? "Used" : "Available"}</button>
+        <button type="button" class="btn small" id="their-first">They got a first down</button>
+      </div>
+      <p class="muted small">We get one blitz per set of downs. When they get a first down, the blitz is available again.</p>
+      ${callList("defense")}
+    </section>`;
 
+  $("#d-tracker").addEventListener("click", (e) => {
+    if (e.target.id === "blitz") gd.blitz = !gd.blitz;
+    else if (e.target.id === "their-first") gd.blitz = false;
+    else return;
+    saveGd();
+    renderGameDay();
+  });
   const tracker = view.querySelector(".tracker");
   tracker.addEventListener("click", (e) => {
     const d = e.target.closest("[data-down]"), f = e.target.closest("[data-first]");

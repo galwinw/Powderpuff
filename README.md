@@ -17,7 +17,7 @@ The starter playbook is built around our rules: 7v7, two first downs per drive, 
 
 - **Offense (everyday):** Slant-Flat, Bubble Screen, Mesh, Flood, Jet Pitch, Toss Sweep
 - **Special:** Toss Bomb, Slip Screen, Center Pop, QB Sneak, Hook & Ladder
-- **Defense:** 2-Rush Zone, Man + Safety
+- **Defense:** 2-Rush Man (base), Middle Blitz (our one blitz per set of downs)
 
 ## Turning on cloud saving for coaches (one time, about 10 minutes)
 
