@@ -673,6 +673,8 @@ function renderTeam() {
   });
 }
 
+const COACHES = ["Galwin", "Luan", "Wyatt"];
+
 function renderCoachBox() {
   const box = $("#coach");
   if (!box) return;
@@ -688,13 +690,16 @@ function renderCoachBox() {
     box.innerHTML = `<h2>Coach mode</h2>
       <p class="muted">Turn on coach mode to draw new plays, change plays, and update the roster. ${where}</p>
       <form id="coach-on" class="row wrap">
-        <label class="field grow">Your name<input id="coach-name" maxlength="24" value="${esc(last)}" placeholder="e.g. Galwin" autocomplete="nickname" required></label>
+        <label class="field grow">Which coach are you?<select id="coach-name" required>
+          <option value="">Pick your name</option>
+          ${COACHES.map((c) => `<option ${c === last ? "selected" : ""}>${c}</option>`).join("")}
+        </select></label>
         <button class="btn primary" type="submit">Turn on coach mode</button>
       </form>`;
     $("#coach-on").addEventListener("submit", (e) => {
       e.preventDefault();
-      const name = $("#coach-name").value.trim();
-      if (!name) return;
+      const name = $("#coach-name").value;
+      if (!COACHES.includes(name)) { toast("Pick your name first."); return; }
       try { localStorage.setItem("ffp:lastCoach", name); } catch { /* storage unavailable */ }
       setCoach(name);
       toast(`Coach mode is on. Welcome, ${name}.`);
