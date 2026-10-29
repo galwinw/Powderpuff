@@ -11,7 +11,7 @@ Our flag football team's playbook app: animated plays, "my job" highlighting, po
 | **Offense / Defense** | Offense is split into four playbooks (Pass, Pitch, Trick, QB Run). Every play is animated. Tap a player to see their job in plain words. Pick "Who are you?" once and your role is highlighted in every play. |
 | **Learn** | Rules, a glossary, every position explained, and an animated route guide. |
 | **Game Day** | Which play to call in each situation, plus a drive tracker (down, first downs, QB run used). |
-| **Team** | Roster with positions, team settings, and coach login. |
+| **Team** | Roster with positions, team settings, and coach mode. |
 
 The starter playbook is built around our rules: 7v7, two first downs per drive, one QB run per set of downs, no handoffs (pitches only), up to 2 no-hands blockers and 2 rushers, and anyone can block once the ball is caught or pitched.
 
@@ -21,18 +21,20 @@ The starter playbook is built around our rules: 7v7, two first downs per drive, 
 - **QB Run:** QB Sneak, QB Draw, QB Bootleg
 - **Defense:** 2-Rush Man (base), Middle Blitz (our one blitz per set of downs)
 
-## Turning on cloud saving for coaches (one time, about 10 minutes)
+## Team database and coach mode
 
-Until this is set up, the app works fully but edits only save on the device that made them. To let coaches save changes for the whole team:
+The app saves plays, the roster and team settings to a free Supabase database, so changes show up for everyone. It runs on the honor system: there are no logins.
 
-1. **Create a free Supabase project** at https://supabase.com (sign up → New project). Any name and region; save the database password somewhere.
-2. **Create the table:** in the project, open **SQL Editor → New query**, paste everything from [`supabase/schema.sql`](supabase/schema.sql), and click **Run**.
-3. **Only allow invited coaches:** go to **Authentication → Sign In / Providers** and turn **off** "Allow new users to sign up".
-4. **Add each coach:** **Authentication → Users → Add user → Create new user**. Enter their email and a password, and tick "Auto Confirm User". Give them the login.
-5. **Connect the app:** go to **Project Settings → API**. Copy the **Project URL** and the **anon public** key into [`config.js`](config.js). (Or send them to Claude and it will do this part.) Both values are safe to publish: the database only lets logged-in coaches make changes.
-6. Push the change. Coaches log in on the **Team** tab, and their edits reach everyone.
+- **Coach mode:** on the **Team** tab, enter your name and turn on coach mode. That lets you draw new plays, change plays, and update the roster and rules.
+- **Bylines:** new plays show who made them ("Galwin's play"), and edits to someone else's play show who changed it.
+- **Saving merges:** every save starts from the newest copy in the database, so two coaches saving at the same time don't wipe out each other's changes.
 
-The first time a coach saves, the starter plays are copied to the cloud.
+**Setup (already done for this team):**
+1. Create a free project at https://supabase.com.
+2. In **SQL Editor**, run [`supabase/schema.sql`](supabase/schema.sql).
+3. Put the **Project URL** and the **publishable (anon) key** into [`config.js`](config.js). Never put the secret / service_role key in the app.
+
+If `config.js` is left blank, the app still works, but edits only save on the device that made them.
 
 ## How it's built
 

@@ -138,6 +138,11 @@ p { margin: 0.4rem 0; }
 .play-card h2 { font-size: 1.4rem; margin: 0; }
 .play-card p { margin: 6px 0 0; color: var(--muted); font-size: 0.95rem; }
 .play-card .you { color: var(--ink); }
+.byline { font-size: 0.85rem; font-weight: 700; color: var(--muted); margin: 2px 0 0; }
+.play-card .byline { color: var(--muted); }
+.danger-zone { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 10px; }
+.danger-zone summary { cursor: pointer; font-weight: 700; color: var(--danger); }
+.danger-zone input { border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; background: var(--bg); min-height: 44px; flex: 1 1 140px; }
 .play-card-body { min-width: 0; }
 .thumb { width: 112px; aspect-ratio: 1; border-radius: 10px; display: block; max-width: 100%; }
 

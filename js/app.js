@@ -1,5 +1,5 @@
 import { POSITIONS, OFFENSE_IDS, DEFENSE_IDS, POSITION_GROUPS, ROUTE_LESSONS, SITUATIONS, GLOSSARY, GROUPS } from "./data.js";
-import { state, init, save, cloud, canEdit, login, logout, setMe, setLocalCoach, resetToDefault, bus } from "./store.js";
+import { state, init, mutate, cloud, canEdit, setMe, setCoach, resetToDefault, bus } from "./store.js";
 import { drawPlay, Animator, posInfo } from "./field.js";
 import { mountEditor, newPlay } from "./editor.js";
 
@@ -77,6 +77,14 @@ function routeLink(rid) {
 
 function groupOf(posId) {
   return POSITION_GROUPS.find((g) => g.ids.includes(posId));
+}
+
+// "Galwin's play", plus who changed it last if that's someone else.
+function byline(p) {
+  const parts = [];
+  if (p.author) parts.push(`${p.author}'s play`);
+  if (p.editedBy && p.editedBy !== p.author) parts.push(`${p.author ? "" : "Starter play · "}edited by ${p.editedBy}`);
+  return parts.join(" · ");
 }
 
 function renderMeChip() {
@@ -179,6 +187,7 @@ function renderPlays(side) {
         <svg class="thumb" data-play="${p.id}" role="img" aria-label="${esc(p.name)} diagram"></svg>
         <div class="play-card-body">
           <div class="row between"><h2>${esc(p.name)}</h2>${isOff ? "" : `<span class="pill">${groupLabel(p.group)}</span>`}</div>
+          ${byline(p) ? `<p class="byline">${esc(byline(p))}</p>` : ""}
           <p>${esc(p.summary)}</p>
           ${me ? `<p class="you">${dot(mine)} <strong>You:</strong> ${esc(me.note.split(/(?<=\.)\s/)[0])}</p>` : ""}
         </div>
@@ -217,6 +226,7 @@ function renderPlay(id) {
         <h1>${esc(play.name)}</h1>
         ${canEdit() ? `<a class="btn small" href="#/edit/${play.id}">Edit play</a>` : ""}
       </div>
+      ${byline(play) ? `<p class="byline">${esc(byline(play))}</p>` : ""}
       <div class="row wrap gap-s"><span class="pill">${groupLabel(play.group)}</span>${situations.map((s) => `<span class="pill soft">${esc(s.label)}</span>`).join("")}</div>
       <p class="lede">${esc(play.summary)}</p>
     </div>
@@ -322,7 +332,7 @@ function renderPlay(id) {
 
 // ---------- Editor ----------
 function renderEdit(id) {
-  if (!canEdit()) { view.innerHTML = `<p class="empty">Only coaches can edit plays. <a href="#/team">Coach login</a></p>`; return; }
+  if (!canEdit()) { view.innerHTML = `<p class="empty">Turn on coach mode to draw and edit plays. <a href="#/team">Go to coach mode</a></p>`; return; }
   const isNew = ["new-offense", "new-special", "new-defense"].includes(id);
   const play = isNew ? newPlay(id.slice(4)) : state.playbook.plays.find((p) => p.id === id);
   if (!play) { view.innerHTML = `<p class="empty">Play not found.</p>`; return; }
@@ -331,20 +341,20 @@ function renderEdit(id) {
     isNew,
     onCancel: back,
     onSave: async (updated) => {
-      const list = state.playbook.plays;
-      const i = list.findIndex((p) => p.id === updated.id);
-      const before = structuredClone(state.playbook);
-      if (i >= 0) list[i] = updated; else list.push(updated);
-      try { await save("playbook"); }
-      catch (e) { state.playbook = before; throw e; }
+      const coach = state.coach.name;
+      if (isNew) updated.author = coach;
+      else if (updated.author !== coach) updated.editedBy = coach;
+      else delete updated.editedBy;
+      await mutate("playbook", (doc) => {
+        const i = doc.plays.findIndex((p) => p.id === updated.id);
+        if (i >= 0) doc.plays[i] = updated; else doc.plays.push(updated);
+      });
       toast("Play saved.");
       location.hash = `#/play/${updated.id}`;
     },
     onDelete: async (p) => {
-      const before = structuredClone(state.playbook);
-      state.playbook.plays = state.playbook.plays.filter((x) => x.id !== p.id);
-      try { await save("playbook"); }
-      catch (e) { state.playbook = before; toast("Couldn't delete: " + e.message); return; }
+      try { await mutate("playbook", (doc) => { doc.plays = doc.plays.filter((x) => x.id !== p.id); }); }
+      catch (e) { toast("Couldn't delete: " + e.message); return; }
       toast("Play deleted.");
       location.hash = `#/${TAB_FOR[p.side]}`;
     },
@@ -574,6 +584,7 @@ function renderTeam() {
 
   view.innerHTML = `
     <div class="page-head"><h1>Team</h1><p class="lede">${esc(state.settings.teamName)}</p></div>
+    <section class="card" id="coach"></section>
     <section class="card">
       <div class="row between wrap"><h2>Roster</h2><button type="button" class="btn small" id="whoami">${state.me ? "Change who I am" : "Who am I?"}</button></div>
       ${roster.length ? `
@@ -606,50 +617,57 @@ function renderTeam() {
       <label class="field">League rules (one per line)<textarea id="rules-in" rows="8">${esc(state.settings.rules.join("\n"))}</textarea></label>
       <div class="row wrap">
         <button type="button" class="btn primary" id="save-settings">Save settings</button>
-        <button type="button" class="btn danger" id="reset-plays">Reset plays to the starter playbook</button>
       </div>
-    </section>` : ""}
-    <section class="card" id="coach"></section>`;
+      <details class="danger-zone">
+        <summary>Reset plays</summary>
+        <p class="muted small">This deletes every play the team has drawn or changed and brings back the starter playbook, for everyone. Type RESET to confirm.</p>
+        <div class="row wrap">
+          <input id="reset-confirm" placeholder="Type RESET" aria-label="Type RESET to confirm" autocomplete="off">
+          <button type="button" class="btn danger" id="reset-plays">Reset plays</button>
+        </div>
+      </details>
+    </section>` : ""}`;
 
   $("#whoami").addEventListener("click", openMeDialog);
   renderCoachBox();
 
   if (!editable) return;
-  const persistRoster = async (msg) => {
-    try { await save("roster"); if (msg) toast(msg); renderMeChip(); }
+  const persistRoster = async (change, msg) => {
+    try { await mutate("roster", change); if (msg) toast(msg); renderMeChip(); }
     catch (e) { toast("Couldn't save: " + e.message); }
   };
   view.querySelector("table.roster")?.addEventListener("change", (e) => {
     const row = e.target.closest("[data-row]");
     if (!row) return;
-    const p = rosterPlayer(row.dataset.row);
+    const id = row.dataset.row;
     const k = e.target.dataset.k;
-    p[k] = k === "name" ? e.target.value.trim() || p.name : e.target.value || null;
-    persistRoster("Roster saved.");
+    const value = k === "name" ? e.target.value.trim() : e.target.value || null;
+    if (k === "name" && !value) return;
+    persistRoster((doc) => { const p = doc.players.find((x) => x.id === id); if (p) p[k] = value; }, "Roster saved.");
   });
   view.querySelector("table.roster")?.addEventListener("click", (e) => {
     const b = e.target.closest("[data-remove]");
     if (!b) return;
     if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "Remove?"; return; }
-    state.roster.players = roster.filter((p) => p.id !== b.dataset.remove);
-    persistRoster("Player removed.").then(renderTeam);
+    const id = b.dataset.remove;
+    persistRoster((doc) => { doc.players = doc.players.filter((p) => p.id !== id); }, "Player removed.").then(renderTeam);
   });
   $("#add-player").addEventListener("submit", (e) => {
     e.preventDefault();
     const name = $("#np-name").value.trim();
     if (!name) return;
-    roster.push({ id: "p-" + Math.random().toString(36).slice(2, 8), name, offense: $("#np-off").value || null, defense: $("#np-def").value || null });
-    persistRoster(`${name} added.`).then(() => { renderTeam(); $("#np-name").focus(); });
+    const player = { id: "p-" + Math.random().toString(36).slice(2, 8), name, offense: $("#np-off").value || null, defense: $("#np-def").value || null };
+    persistRoster((doc) => { doc.players.push(player); }, `${name} added.`).then(() => { renderTeam(); $("#np-name").focus(); });
   });
   $("#save-settings").addEventListener("click", async () => {
-    state.settings.teamName = $("#team-name-in").value.trim() || "Powderpuff Playbook";
-    state.settings.rules = $("#rules-in").value.split("\n").map((s) => s.trim()).filter(Boolean);
-    try { await save("settings"); toast("Settings saved."); applyTeamName(); renderTeam(); }
+    const teamName = $("#team-name-in").value.trim() || "Powderpuff Playbook";
+    const rules = $("#rules-in").value.split("\n").map((s) => s.trim()).filter(Boolean);
+    try { await mutate("settings", (doc) => { doc.teamName = teamName; doc.rules = rules; }); toast("Settings saved."); applyTeamName(); renderTeam(); }
     catch (e) { toast("Couldn't save: " + e.message); }
   });
   const reset = $("#reset-plays");
   reset.addEventListener("click", async () => {
-    if (!reset.dataset.armed) { reset.dataset.armed = "1"; reset.textContent = "Tap again: this replaces ALL plays"; return; }
+    if ($("#reset-confirm").value.trim().toUpperCase() !== "RESET") { toast("Type RESET to confirm."); $("#reset-confirm").focus(); return; }
     try { await resetToDefault("playbook"); toast("Plays reset to the starter playbook."); renderTeam(); }
     catch (e) { toast("Couldn't reset: " + e.message); }
   });
@@ -658,32 +676,32 @@ function renderTeam() {
 function renderCoachBox() {
   const box = $("#coach");
   if (!box) return;
-  if (cloud.enabled) {
-    if (cloud.user) {
-      box.innerHTML = `<h2>Coach</h2><p>Logged in as <strong>${esc(cloud.user.email)}</strong>. Your changes save for the whole team.</p>
-        <button type="button" class="btn" id="logout">Log out</button>`;
-      $("#logout").addEventListener("click", async () => { await logout(); toast("Logged out."); route(); });
-    } else {
-      box.innerHTML = `<h2>Coach login</h2><p class="muted">Coaches log in to edit plays and the roster. Players don't need an account.</p>
-        <form id="login" class="stack">
-          <label class="field">Email<input type="email" id="lg-email" autocomplete="username" required></label>
-          <label class="field">Password<input type="password" id="lg-pass" autocomplete="current-password" required></label>
-          <p class="error" id="lg-err" role="alert"></p>
-          <button class="btn primary" type="submit">Log in</button>
-        </form>`;
-      $("#login").addEventListener("submit", async (e) => {
-        e.preventDefault();
-        try { await login($("#lg-email").value, $("#lg-pass").value); toast("Welcome, coach."); route(); }
-        catch (err) { $("#lg-err").textContent = err.message === "Invalid login credentials" ? "That email and password don't match a coach account." : err.message; }
-      });
-    }
-    if (cloud.error) box.insertAdjacentHTML("beforeend", `<p class="error">Couldn't reach the team database (${esc(cloud.error)}). Showing the last saved copy.</p>`);
+  const where = cloud.enabled ? "Changes save for the whole team." : "Cloud saving isn't set up, so changes only save on this device.";
+  if (state.coach) {
+    box.innerHTML = `<h2>Coach mode is on</h2>
+      <p>You're coaching as <strong>${esc(state.coach.name)}</strong>. Plays you create will say "${esc(state.coach.name)}'s play". ${where}</p>
+      <button type="button" class="btn" id="coach-off">Turn off coach mode</button>`;
+    $("#coach-off").addEventListener("click", () => { setCoach(null); toast("Coach mode is off."); route(); });
   } else {
+    let last = "";
+    try { last = localStorage.getItem("ffp:lastCoach") || ""; } catch { /* storage unavailable */ }
     box.innerHTML = `<h2>Coach mode</h2>
-      <p class="muted">Cloud saving isn't set up yet, so edits only save on <strong>this device</strong>. Once it's connected, coaches log in here and changes reach the whole team.</p>
-      <button type="button" class="btn ${state.localCoach ? "" : "primary"}" id="local-coach">${state.localCoach ? "Turn off coach mode" : "Turn on coach mode"}</button>`;
-    $("#local-coach").addEventListener("click", () => { setLocalCoach(!state.localCoach); route(); });
+      <p class="muted">Turn on coach mode to draw new plays, change plays, and update the roster. ${where}</p>
+      <form id="coach-on" class="row wrap">
+        <label class="field grow">Your name<input id="coach-name" maxlength="24" value="${esc(last)}" placeholder="e.g. Galwin" autocomplete="nickname" required></label>
+        <button class="btn primary" type="submit">Turn on coach mode</button>
+      </form>`;
+    $("#coach-on").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const name = $("#coach-name").value.trim();
+      if (!name) return;
+      try { localStorage.setItem("ffp:lastCoach", name); } catch { /* storage unavailable */ }
+      setCoach(name);
+      toast(`Coach mode is on. Welcome, ${name}.`);
+      route();
+    });
   }
+  if (cloud.error) box.insertAdjacentHTML("beforeend", `<p class="error">Couldn't reach the team database (${esc(cloud.error)}). Showing the last saved copy.</p>`);
 }
 
 function applyTeamName() {
@@ -719,7 +737,6 @@ async function start() {
   renderMeChip();
   $("#me-chip").addEventListener("click", openMeDialog);
   bus.addEventListener("me", () => { renderMeChip(); route(); });
-  bus.addEventListener("auth", () => { if (location.hash.startsWith("#/team")) renderCoachBox(); });
   window.addEventListener("hashchange", route);
   route();
 }

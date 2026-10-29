@@ -1,17 +1,17 @@
 // Loads and saves the team's data.
-// - When config.js has Supabase keys: everyone reads from the cloud, logged-in coaches save to it.
-// - Without keys: data is saved in this browser only (handy for trying things out).
+// - When config.js has Supabase settings: everyone reads from the team database, and anyone
+//   in coach mode can save to it (honor system, no logins).
+// - Without settings: data is saved in this browser only (handy for trying things out).
 import { DEFAULT_PLAYBOOK, DEFAULT_ROSTER, DEFAULT_SETTINGS } from "./data.js";
 
 const cfg = window.TEAM_CONFIG || {};
 const DEFAULTS = { playbook: DEFAULT_PLAYBOOK, roster: DEFAULT_ROSTER, settings: DEFAULT_SETTINGS };
 const LS = "ffp:";
+const API = cfg.supabaseUrl ? cfg.supabaseUrl.replace(/\/+$/, "") + "/rest/v1/team_docs" : "";
 
 export const bus = new EventTarget();
 export const cloud = {
   enabled: Boolean(cfg.supabaseUrl && cfg.supabaseAnonKey),
-  client: null,
-  user: null,
   error: null,
 };
 
@@ -30,33 +30,41 @@ export const state = {
   roster: null,
   settings: null,
   me: lsGet("me"),
-  localCoach: lsGet("localCoach") === true,
+  coach: lsGet("coach"), // { name } while coach mode is on
 };
 
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = src;
-    s.onload = resolve;
-    s.onerror = () => reject(new Error("Couldn't load " + src));
-    document.head.appendChild(s);
+async function request(query, options = {}) {
+  const res = await fetch(API + query, {
+    ...options,
+    headers: { apikey: cfg.supabaseAnonKey, "Content-Type": "application/json", ...(options.headers || {}) },
+  });
+  if (!res.ok) {
+    let msg = `${res.status} ${res.statusText}`;
+    try { const body = await res.json(); msg = body.message || body.error || msg; } catch { /* not JSON */ }
+    throw new Error(msg);
+  }
+  const text = await res.text(); // saves come back empty
+  return text ? JSON.parse(text) : null;
+}
+
+async function fetchDoc(key) {
+  const rows = await request(`?select=data&key=eq.${encodeURIComponent(key)}`);
+  return rows[0]?.data ?? null;
+}
+
+async function putDoc(key, data) {
+  await request("?on_conflict=key", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify({ key, data, updated_at: new Date().toISOString() }),
   });
 }
 
 export async function init() {
   if (cloud.enabled) {
     try {
-      await loadScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js");
-      cloud.client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
-      const { data: { session } } = await cloud.client.auth.getSession();
-      cloud.user = session?.user || null;
-      cloud.client.auth.onAuthStateChange((_event, s) => {
-        cloud.user = s?.user || null;
-        bus.dispatchEvent(new Event("auth"));
-      });
-      const { data, error } = await cloud.client.from("team_docs").select("key,data");
-      if (error) throw error;
-      for (const row of data) if (row.key in DEFAULTS) state[row.key] = row.data;
+      const rows = await request("?select=key,data");
+      for (const row of rows) if (row.key in DEFAULTS) state[row.key] = row.data;
       // Keep a copy so the app still opens with the latest plays if the network drops.
       for (const k of Object.keys(DEFAULTS)) if (state[k]) lsSet("cache:" + k, state[k]);
     } catch (e) {
@@ -71,40 +79,40 @@ export async function init() {
 }
 
 export function canEdit() {
-  return cloud.enabled ? Boolean(cloud.user) : state.localCoach;
+  return Boolean(state.coach?.name);
 }
 
-export function setLocalCoach(on) {
-  state.localCoach = on;
-  lsSet("localCoach", on);
+export function setCoach(name) {
+  state.coach = name ? { name } : null;
+  if (state.coach) lsSet("coach", state.coach); else lsDel("coach");
 }
 
-export async function save(key) {
+// Applies a change to the newest saved copy, so two coaches saving close together
+// don't wipe out each other's work. `change` edits the document in place.
+export async function mutate(key, change) {
   if (cloud.enabled) {
-    if (!cloud.user) throw new Error("Log in as a coach to save changes.");
-    const { error } = await cloud.client
-      .from("team_docs")
-      .upsert({ key, data: state[key], updated_at: new Date().toISOString() });
-    if (error) throw new Error(error.message);
-    lsSet("cache:" + key, state[key]);
+    const latest = (await fetchDoc(key)) ?? state[key] ?? structuredClone(DEFAULTS[key]);
+    change(latest);
+    await putDoc(key, latest);
+    state[key] = latest;
+    lsSet("cache:" + key, latest);
   } else {
-    lsSet(key, state[key]);
+    const doc = structuredClone(state[key]);
+    change(doc);
+    lsSet(key, doc);
+    state[key] = doc;
   }
 }
 
 export async function resetToDefault(key) {
-  state[key] = structuredClone(DEFAULTS[key]);
-  if (cloud.enabled) await save(key);
-  else lsDel(key);
-}
-
-export async function login(email, password) {
-  const { error } = await cloud.client.auth.signInWithPassword({ email, password });
-  if (error) throw new Error(error.message);
-}
-
-export async function logout() {
-  await cloud.client.auth.signOut();
+  const fresh = structuredClone(DEFAULTS[key]);
+  if (cloud.enabled) {
+    await putDoc(key, fresh);
+    lsSet("cache:" + key, fresh);
+  } else {
+    lsDel(key);
+  }
+  state[key] = fresh;
 }
 
 export function setMe(me) {
