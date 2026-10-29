@@ -2,14 +2,13 @@
 // - When config.js has Supabase settings: everyone reads from the team database, and anyone
 //   in coach mode can save to it (honor system, no logins).
 // - Without settings: data is saved in this browser only (handy for trying things out).
-import { DEFAULT_PLAYBOOK, DEFAULT_ROSTER, DEFAULT_SETTINGS } from "./data.js";
+import { DEFAULT_PLAYBOOK, DEFAULT_SETTINGS } from "./data.js";
 
 const cfg = window.TEAM_CONFIG || {};
-const DEFAULTS = { playbook: DEFAULT_PLAYBOOK, roster: DEFAULT_ROSTER, settings: DEFAULT_SETTINGS };
+const DEFAULTS = { playbook: DEFAULT_PLAYBOOK, settings: DEFAULT_SETTINGS };
 const LS = "ffp:";
 const API = cfg.supabaseUrl ? cfg.supabaseUrl.replace(/\/+$/, "") + "/rest/v1/team_docs" : "";
 
-export const bus = new EventTarget();
 export const cloud = {
   enabled: Boolean(cfg.supabaseUrl && cfg.supabaseAnonKey),
   error: null,
@@ -27,9 +26,7 @@ function lsDel(k) {
 
 export const state = {
   playbook: null,
-  roster: null,
   settings: null,
-  me: lsGet("me"),
   coach: lsGet("coach"), // { name } while coach mode is on
 };
 
@@ -113,10 +110,4 @@ export async function resetToDefault(key) {
     lsDel(key);
   }
   state[key] = fresh;
-}
-
-export function setMe(me) {
-  state.me = me;
-  if (me) lsSet("me", me); else lsDel("me");
-  bus.dispatchEvent(new Event("me"));
 }

@@ -1,5 +1,5 @@
 import { POSITIONS, OFFENSE_IDS, DEFENSE_IDS, POSITION_GROUPS, ROUTE_LESSONS, SITUATIONS, GLOSSARY, GROUPS } from "./data.js";
-import { state, init, mutate, cloud, canEdit, setMe, setCoach, resetToDefault, bus } from "./store.js";
+import { state, init, mutate, cloud, canEdit, setCoach, resetToDefault } from "./store.js";
 import { drawPlay, Animator, posInfo } from "./field.js";
 import { mountEditor, newPlay } from "./editor.js";
 
@@ -37,32 +37,10 @@ const PLAYBOOK_INFO = {
 };
 const groupLabel = (g) => `${PLAYBOOK_INFO[g]?.icon ? PLAYBOOK_INFO[g].icon + " " : ""}${esc(g)}`;
 
-function rosterPlayer(id) {
-  return state.roster.players.find((p) => p.id === id);
-}
-
 // Special plays use the offense positions.
 const posSide = (side) => (side === "defense" ? "defense" : "offense");
 const TAB_FOR = { offense: "plays", special: "plays", defense: "defense" };
 const SIDE_TITLE = { offense: "Offense", special: "Offense", defense: "Defense" };
-
-function myPos(side) {
-  const me = state.me;
-  if (!me) return null;
-  const src = me.playerId ? rosterPlayer(me.playerId) || me : me;
-  return posSide(side) === "offense" ? src.offense || null : src.defense || null;
-}
-
-function myName() {
-  const me = state.me;
-  if (!me) return null;
-  if (me.playerId) return rosterPlayer(me.playerId)?.name || me.name || null;
-  return me.name || null;
-}
-
-function namesAt(pos, side) {
-  return state.roster.players.filter((p) => (posSide(side) === "offense" ? p.offense : p.defense) === pos).map((p) => p.name);
-}
 
 function dot(id, big = false) {
   return `<span class="dot${big ? " big" : ""}" style="background:${posInfo(id).color}"></span>`;
@@ -89,15 +67,6 @@ function byline(p) {
   return parts.join(" · ");
 }
 
-function renderMeChip() {
-  const chip = $("#me-chip");
-  const name = myName();
-  const pos = myPos("offense") || myPos("defense");
-  chip.innerHTML = name || pos
-    ? `${pos ? dot(pos) : ""}<span>${esc(name || posInfo(pos).name)}</span>`
-    : `<span>Who are you?</span>`;
-}
-
 function setActiveTab(page) {
   const map = { play: null, edit: null };
   let tab = page in map ? null : page;
@@ -108,46 +77,6 @@ function setActiveTab(page) {
     if (id?.startsWith("new-")) tab = TAB_FOR[id.slice(4)] || "plays";
   }
   for (const a of document.querySelectorAll(".tabs a")) a.classList.toggle("on", a.dataset.tab === tab);
-}
-
-// ---------- "Who are you?" dialog ----------
-function openMeDialog() {
-  const dlg = $("#me-dialog");
-  const roster = state.roster.players;
-  const posOptions = (ids, cur) => `<option value="">Not sure yet</option>` + ids.map((id) => `<option value="${id}" ${cur === id ? "selected" : ""}>${esc(POSITIONS[id].name)}</option>`).join("");
-  dlg.innerHTML = `
-    <form method="dialog" class="dialog-body">
-      <h2>Who are you?</h2>
-      <p class="muted">We'll highlight your job in every play. This is saved on this device only.</p>
-      ${roster.length ? `
-        <div class="pick-list">
-          ${roster.map((p) => `<button type="button" class="pick ${state.me?.playerId === p.id ? "on" : ""}" data-me="${p.id}">
-            <strong>${esc(p.name)}</strong>
-            <span class="muted">${p.offense ? esc(POSITIONS[p.offense].name) : "—"} · ${p.defense ? esc(POSITIONS[p.defense].name) : "—"}</span>
-          </button>`).join("")}
-        </div>
-        <p class="muted small">Not on the list? Pick your positions instead:</p>` : `<p class="muted small">The roster is empty, so pick your positions:</p>`}
-      <label class="field">Offense position<select id="me-off">${posOptions(OFFENSE_IDS, !state.me?.playerId ? state.me?.offense : "")}</select></label>
-      <label class="field">Defense position<select id="me-def">${posOptions(DEFENSE_IDS, !state.me?.playerId ? state.me?.defense : "")}</select></label>
-      <div class="row wrap">
-        <button type="button" class="btn primary" id="me-save">Use these positions</button>
-        ${state.me ? `<button type="button" class="btn" id="me-clear">Clear</button>` : ""}
-        <button type="button" class="btn" id="me-close">Close</button>
-      </div>
-    </form>`;
-  dlg.onclick = (e) => {
-    const b = e.target.closest("[data-me]");
-    if (b) { setMe({ playerId: b.dataset.me }); dlg.close(); toast("Your plays are highlighted now."); }
-    if (e.target.id === "me-save") {
-      const offense = $("#me-off", dlg).value || null, defense = $("#me-def", dlg).value || null;
-      setMe(offense || defense ? { offense, defense } : null);
-      dlg.close();
-    }
-    if (e.target.id === "me-clear") { setMe(null); dlg.close(); }
-    if (e.target.id === "me-close") dlg.close();
-    if (e.target === dlg) dlg.close();
-  };
-  dlg.showModal();
 }
 
 // ---------- Playbook list ----------
@@ -164,8 +93,6 @@ function renderPlays(side) {
   const playsIn = (b) => (b === "Coaches" ? coachPlays : isOff ? starter.filter((p) => p.group === b) : starter);
   let book = sessionStorage.getItem("book:" + side) || books[0];
   if (!books.includes(book)) book = books[0];
-  const mine = myPos(side);
-
   view.innerHTML = `
     <div class="page-head">
       <h1>${SIDE_TITLE[side]}</h1>
@@ -173,7 +100,6 @@ function renderPlays(side) {
         ? "Pick a playbook, then tap a play to watch it run. Every play starts from the same lineup, so you always line up in the same spot."
         : "We play man-to-man with two rushers. Tap a play to see where you go."}</p>
     </div>
-    ${!mine ? `<button type="button" class="banner" id="who">${state.me ? "Pick your " + side + " position" : "Tell us who you are"} to see your job highlighted in every play →</button>` : ""}
     <div class="books ${isOff ? "" : "two"}" role="tablist" aria-label="Playbooks">
       ${books.map((g) => `<button type="button" role="tab" class="book ${g === book ? "on" : ""}" data-book="${esc(g)}" aria-selected="${g === book}">
         <span class="book-icon" aria-hidden="true">${PLAYBOOK_INFO[g]?.icon || "📋"}</span>
@@ -189,7 +115,6 @@ function renderPlays(side) {
     const shown = playsIn(book);
     $("#book-desc").textContent = PLAYBOOK_INFO[book]?.desc || "";
     $("#cards").innerHTML = shown.length ? shown.map((p) => {
-      const me = mine && p.players.find((x) => x.id === mine);
       return `
       <a class="play-card" href="#/play/${p.id}">
         <svg class="thumb" data-play="${p.id}" role="img" aria-label="${esc(p.name)} diagram"></svg>
@@ -197,15 +122,14 @@ function renderPlays(side) {
           <div class="row between"><h2>${esc(p.name)}</h2>${book === "Coaches" || !isOff ? `<span class="pill">${groupLabel(p.group)}</span>` : ""}</div>
           ${byline(p) ? `<p class="byline">${esc(byline(p))}</p>` : ""}
           <p>${esc(p.summary)}</p>
-          ${me ? `<p class="you">${dot(mine)} <strong>You:</strong> ${esc(me.note.split(/(?<=\.)\s/)[0])}</p>` : ""}
         </div>
       </a>`;
     }).join("") : book === "Coaches"
-      ? `<p class="empty">No coach plays yet. ${canEdit() ? "Tap + New play below to draw one." : "Coaches can draw them in coach mode (Team tab)."}</p>`
+      ? `<p class="empty">No coach plays yet. ${canEdit() ? "Tap + New play below to draw one." : "Coaches can draw them in coach mode (Coach tab)."}</p>`
       : `<p class="empty">No ${side} plays yet.${canEdit() ? " Add the first one below." : ""}</p>`;
     for (const svg of view.querySelectorAll("svg[data-play]")) {
       const p = list.find((x) => x.id === svg.dataset.play);
-      drawPlay(svg, p, { thumb: true, highlight: mine });
+      drawPlay(svg, p, { thumb: true });
     }
   }
   draw();
@@ -217,7 +141,6 @@ function renderPlays(side) {
     for (const c of view.querySelectorAll("[data-book]")) { c.classList.toggle("on", c === b); c.setAttribute("aria-selected", c === b); }
     draw();
   });
-  $("#who")?.addEventListener("click", openMeDialog);
 }
 
 // ---------- Play detail ----------
@@ -225,8 +148,7 @@ function renderPlay(id) {
   const play = state.playbook.plays.find((p) => p.id === id);
   if (!play) { view.innerHTML = `<p class="empty">That play doesn't exist anymore. <a href="#/plays">Back to plays</a></p>`; return; }
   const side = play.side;
-  const mine = myPos(side);
-  let selected = mine && play.players.some((p) => p.id === mine) ? mine : null;
+  let selected = null;
   const situations = SITUATIONS.filter((s) => play.situations?.includes(s.id));
 
   view.innerHTML = `
@@ -307,17 +229,12 @@ function renderPlay(id) {
   function drawJob() {
     const box = $("#job");
     if (!selected) {
-      box.innerHTML = mine
-        ? `<h2>Your job</h2><p class="muted">Your position (${esc(posInfo(mine).name)}) isn't in this play.</p>`
-        : `<h2>Find your job</h2><p class="muted">Tap any player on the field, or <button type="button" class="linkish" id="who2">tell us who you are</button> to always see your job first.</p>`;
-      $("#who2")?.addEventListener("click", openMeDialog);
+      box.innerHTML = `<h2>Find your job</h2><p class="muted">Tap any player on the field, or a position in the list below, to highlight their route and see their job.</p>`;
       return;
     }
     const p = play.players.find((x) => x.id === selected);
-    const names = namesAt(selected, side);
     box.innerHTML = `
-      <h2>${dot(selected, true)}${selected === mine ? "Your job" : esc(labelFor(play, selected))}</h2>
-      <p class="muted small">${esc(labelFor(play, selected))}${names.length ? " · " + esc(names.join(", ")) : ""}</p>
+      <h2>${dot(selected, true)}${esc(labelFor(play, selected))}</h2>
       <p class="job-text">${esc(p.note || "No instructions yet.")}</p>
       ${p.route ? routeLink(p.route) : ""}
       <a class="route-link" href="#/learn/positions#${groupOf(selected)?.id || ""}">About this position ›</a>`;
@@ -325,9 +242,8 @@ function renderPlay(id) {
 
   function drawAssign() {
     $("#assign").innerHTML = play.players.map((p) => {
-      const names = namesAt(p.id, side);
       return `<li><button type="button" class="assign-row ${p.id === selected ? "on" : ""}" data-pid="${p.id}">
-        ${dot(p.id)}<span><strong>${esc(labelFor(play, p.id))}</strong>${names.length ? ` <span class="muted">· ${esc(names.join(", "))}</span>` : ""}<br><span class="muted">${esc(p.note)}</span></span>
+        ${dot(p.id)}<span><strong>${esc(labelFor(play, p.id))}</strong><br><span class="muted">${esc(p.note)}</span></span>
       </button></li>`;
     }).join("");
   }
@@ -392,14 +308,11 @@ function renderPositions() {
     <h2 class="section-title">${title}</h2>
     <div class="pos-grid">
       ${POSITION_GROUPS.filter((g) => g.side === side).map((g) => {
-        const names = g.ids.flatMap((id) => namesAt(id, side));
-        const isMe = g.ids.includes(myPos(side));
-        return `<article class="card pos-card ${isMe ? "is-me" : ""}" id="${g.id}">
-          <h3><span class="dots">${g.ids.map((id) => dot(id, true)).join("")}</span>${esc(g.name)}${isMe ? ` <span class="pill">You</span>` : ""}</h3>
+        return `<article class="card pos-card" id="${g.id}">
+          <h3><span class="dots">${g.ids.map((id) => dot(id, true)).join("")}</span>${esc(g.name)}</h3>
           <p>${esc(g.job)}</p>
           <ul class="tips">${g.tips.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>
           <p class="muted small"><strong>Good fit:</strong> ${esc(g.good)}</p>
-          ${names.length ? `<p class="small"><strong>Playing here:</strong> ${esc(names.join(", "))}</p>` : ""}
           ${g.routesLink ? `<a class="route-link" href="#/learn/routes">Learn the routes ›</a>` : ""}
         </article>`;
       }).join("")}
@@ -518,7 +431,7 @@ function renderRules() {
     <section class="card">
       <h2>Our league rules</h2>
       <ol class="rules">${state.settings.rules.map((r) => `<li>${esc(r)}</li>`).join("")}</ol>
-      ${canEdit() ? `<p class="muted small">Coaches can change these on the Team page.</p>` : ""}
+      ${canEdit() ? `<p class="muted small">Coaches can change these on the Coach tab.</p>` : ""}
     </section>
     <section class="card">
       <h2>Football words</h2>
@@ -588,38 +501,11 @@ function renderGameDay() {
 
 // ---------- Team ----------
 function renderTeam() {
-  const roster = state.roster.players;
   const editable = canEdit();
-  const posSelect = (ids, cur, attr) => `<select ${attr}><option value="">—</option>${ids.map((id) => `<option value="${id}" ${cur === id ? "selected" : ""}>${esc(POSITIONS[id].name)}</option>`).join("")}</select>`;
 
   view.innerHTML = `
-    <div class="page-head"><h1>Team</h1><p class="lede">${esc(state.settings.teamName)}</p></div>
+    <div class="page-head"><h1>Coach</h1><p class="lede">${esc(state.settings.teamName)}</p></div>
     <section class="card" id="coach"></section>
-    <section class="card">
-      <div class="row between wrap"><h2>Roster</h2><button type="button" class="btn small" id="whoami">${state.me ? "Change who I am" : "Who am I?"}</button></div>
-      ${roster.length ? `
-      <div class="table-wrap"><table class="roster">
-        <thead><tr><th>Name</th><th>Offense</th><th>Defense</th>${editable ? "<th></th>" : ""}</tr></thead>
-        <tbody>${roster.map((p) => editable ? `
-          <tr data-row="${p.id}">
-            <td><input value="${esc(p.name)}" data-k="name" aria-label="Name" maxlength="30"></td>
-            <td>${posSelect(OFFENSE_IDS, p.offense, 'data-k="offense" aria-label="Offense position"')}</td>
-            <td>${posSelect(DEFENSE_IDS, p.defense, 'data-k="defense" aria-label="Defense position"')}</td>
-            <td><button type="button" class="btn small danger" data-remove="${p.id}" aria-label="Remove ${esc(p.name)}">✕</button></td>
-          </tr>` : `
-          <tr><td><strong>${esc(p.name)}</strong></td>
-            <td>${p.offense ? dot(p.offense) + esc(POSITIONS[p.offense].name) : "—"}</td>
-            <td>${p.defense ? dot(p.defense) + esc(POSITIONS[p.defense].name) : "—"}</td></tr>`).join("")}
-        </tbody></table></div>` : `<p class="empty">No players yet.${editable ? " Add your team below. Names show up next to each position in the plays." : " A coach will add the roster soon."}</p>`}
-      ${editable ? `
-        <form class="row wrap add-player" id="add-player">
-          <input id="np-name" placeholder="Player name" maxlength="30" aria-label="New player name" required>
-          ${posSelect(OFFENSE_IDS, "", 'id="np-off" aria-label="Offense position"')}
-          ${posSelect(DEFENSE_IDS, "", 'id="np-def" aria-label="Defense position"')}
-          <button class="btn primary" type="submit">Add player</button>
-        </form>
-        <p class="muted small">Tip: use first names or nicknames. Anyone with the link can see this page.</p>` : ""}
-    </section>
     ${editable ? `
     <section class="card">
       <h2>Team settings</h2>
@@ -638,37 +524,9 @@ function renderTeam() {
       </details>
     </section>` : ""}`;
 
-  $("#whoami").addEventListener("click", openMeDialog);
   renderCoachBox();
 
   if (!editable) return;
-  const persistRoster = async (change, msg) => {
-    try { await mutate("roster", change); if (msg) toast(msg); renderMeChip(); }
-    catch (e) { toast("Couldn't save: " + e.message); }
-  };
-  view.querySelector("table.roster")?.addEventListener("change", (e) => {
-    const row = e.target.closest("[data-row]");
-    if (!row) return;
-    const id = row.dataset.row;
-    const k = e.target.dataset.k;
-    const value = k === "name" ? e.target.value.trim() : e.target.value || null;
-    if (k === "name" && !value) return;
-    persistRoster((doc) => { const p = doc.players.find((x) => x.id === id); if (p) p[k] = value; }, "Roster saved.");
-  });
-  view.querySelector("table.roster")?.addEventListener("click", (e) => {
-    const b = e.target.closest("[data-remove]");
-    if (!b) return;
-    if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "Remove?"; return; }
-    const id = b.dataset.remove;
-    persistRoster((doc) => { doc.players = doc.players.filter((p) => p.id !== id); }, "Player removed.").then(renderTeam);
-  });
-  $("#add-player").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const name = $("#np-name").value.trim();
-    if (!name) return;
-    const player = { id: "p-" + Math.random().toString(36).slice(2, 8), name, offense: $("#np-off").value || null, defense: $("#np-def").value || null };
-    persistRoster((doc) => { doc.players.push(player); }, `${name} added.`).then(() => { renderTeam(); $("#np-name").focus(); });
-  });
   $("#save-settings").addEventListener("click", async () => {
     const teamName = $("#team-name-in").value.trim() || "Powderpuff Playbook";
     const rules = $("#rules-in").value.split("\n").map((s) => s.trim()).filter(Boolean);
@@ -698,7 +556,7 @@ function renderCoachBox() {
     let last = "";
     try { last = localStorage.getItem("ffp:lastCoach") || ""; } catch { /* storage unavailable */ }
     box.innerHTML = `<h2>Coach mode</h2>
-      <p class="muted">Turn on coach mode to draw new plays, change plays, and update the roster. ${where}</p>
+      <p class="muted">Turn on coach mode to draw new plays, change plays, and update the team name and rules. ${where}</p>
       <form id="coach-on" class="row wrap">
         <label class="field grow">Which coach are you?<select id="coach-name" required>
           <option value="">Pick your name</option>
@@ -749,9 +607,6 @@ async function start() {
   view.innerHTML = `<p class="empty">Loading the playbook…</p>`;
   await init();
   applyTeamName();
-  renderMeChip();
-  $("#me-chip").addEventListener("click", openMeDialog);
-  bus.addEventListener("me", () => { renderMeChip(); route(); });
   window.addEventListener("hashchange", route);
   route();
 }

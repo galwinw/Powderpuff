@@ -1,6 +1,6 @@
 # Powderpuff Playbook
 
-Our flag football team's playbook app: animated plays, "my job" highlighting, positions, routes, rules and a Game Day call sheet. Coaches can edit plays and the roster right in the app.
+Our flag football team's playbook app: animated plays, tap-a-player job highlighting, positions, routes, rules and a Game Day call sheet. Built to show on a big screen or iPad at practice. Coaches can draw and edit plays right in the app.
 
 **Live site:** https://galwinw.github.io/Powderpuff/
 
@@ -8,10 +8,10 @@ Our flag football team's playbook app: animated plays, "my job" highlighting, po
 
 | Tab | What it does |
 |---|---|
-| **Offense / Defense** | Offense is split into four playbooks (Pass, Pitch, Trick, QB Run). Every play is animated. Tap a player to see their job in plain words. Pick "Who are you?" once and your role is highlighted in every play. |
+| **Offense / Defense** | Offense is split into four playbooks (Pass, Pitch, Trick, QB Run). Every play is animated. Tap any player to highlight their route and see their job in plain words. Each side also has a Coaches playbook for plays the coaches draw. |
 | **Learn** | Rules, a glossary, every position explained, and an animated route guide. |
 | **Game Day** | Which play to call in each situation, plus a drive tracker (down, first downs, QB run used). |
-| **Team** | Roster with positions, team settings, and coach mode. |
+| **Coach** | Coach mode, team name and league rules. |
 
 The starter playbook is built around our rules: 7v7, two first downs per drive, one QB run per set of downs, no handoffs (pitches only), up to 2 no-hands blockers and 2 rushers, and anyone can block once the ball is caught or pitched.
 
@@ -23,9 +23,9 @@ The starter playbook is built around our rules: 7v7, two first downs per drive, 
 
 ## Team database and coach mode
 
-The app saves plays, the roster and team settings to a free Supabase database, so changes show up for everyone. It runs on the honor system: there are no logins.
+The app saves plays and team settings to a free Supabase database, so changes show up for everyone. It runs on the honor system: there are no logins.
 
-- **Coach mode:** on the **Team** tab, enter your name and turn on coach mode. That lets you draw new plays, change plays, and update the roster and rules.
+- **Coach mode:** on the **Coach** tab, pick your name (Galwin, Luan or Wyatt) and turn on coach mode. That lets you draw new plays, change plays, and update the team name and rules.
 - **Bylines:** new plays show who made them ("Galwin's play"), and edits to someone else's play show who changed it.
 - **Saving merges:** every save starts from the newest copy in the database, so two coaches saving at the same time don't wipe out each other's changes.
 

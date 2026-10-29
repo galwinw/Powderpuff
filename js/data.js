@@ -511,7 +511,6 @@ export const DEFAULT_PLAYBOOK = {
   ],
 };
 
-export const DEFAULT_ROSTER = { players: [] };
 
 export const DEFAULT_SETTINGS = {
   teamName: "Powderpuff Playbook",
