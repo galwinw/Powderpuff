@@ -2,7 +2,7 @@
 
 Our flag football team's playbook app: animated plays, "my job" highlighting, positions, routes, rules and a Game Day call sheet. Coaches can edit plays and the roster right in the app.
 
-**Live site:** https://galwinw.github.io/game1/
+**Live site:** https://galwinw.github.io/Powderpuff/
 
 ## What's inside
 
