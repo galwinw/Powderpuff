@@ -2,7 +2,7 @@
 // - When config.js has Supabase settings: everyone reads from the team database, and anyone
 //   in coach mode can save to it (honor system, no logins).
 // - Without settings: data is saved in this browser only (handy for trying things out).
-import { DEFAULT_PLAYBOOK, DEFAULT_SETTINGS } from "./data.js";
+import { DEFAULT_PLAYBOOK, DEFAULT_SETTINGS } from "./data.js?v=202610290234";
 
 const cfg = window.TEAM_CONFIG || {};
 const DEFAULTS = { playbook: DEFAULT_PLAYBOOK, settings: DEFAULT_SETTINGS };

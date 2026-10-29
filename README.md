@@ -46,4 +46,4 @@ A plain static site with no build step: `index.html`, `css/app.css`, and ES modu
 - `store.js`: loading and saving (Supabase or this device)
 - `app.js`: pages and navigation
 
-GitHub Pages serves the site from the `gh-pages` branch. To preview locally, run `python3 -m http.server` in this folder and open http://localhost:8000.
+GitHub Pages serves the site from the `gh-pages` branch. Before each deploy, run `python3 tools/stamp.py` so browsers load the new files instead of old cached copies. To preview locally, run `python3 -m http.server` in this folder and open http://localhost:8000.

@@ -1,7 +1,7 @@
-import { POSITIONS, OFFENSE_IDS, DEFENSE_IDS, POSITION_GROUPS, ROUTE_LESSONS, SITUATIONS, GLOSSARY, GROUPS } from "./data.js";
-import { state, init, mutate, cloud, canEdit, setCoach, resetToDefault } from "./store.js";
-import { drawPlay, Animator, posInfo } from "./field.js";
-import { mountEditor, newPlay } from "./editor.js";
+import { POSITIONS, OFFENSE_IDS, DEFENSE_IDS, POSITION_GROUPS, ROUTE_LESSONS, SITUATIONS, GLOSSARY, GROUPS } from "./data.js?v=202610290234";
+import { state, init, mutate, cloud, canEdit, setCoach, resetToDefault } from "./store.js?v=202610290234";
+import { drawPlay, Animator, posInfo } from "./field.js?v=202610290234";
+import { mountEditor, newPlay } from "./editor.js?v=202610290234";
 
 const $ = (s, r = document) => r.querySelector(s);
 const view = $("#view");

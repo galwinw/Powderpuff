@@ -1,6 +1,6 @@
 // Coach play editor: move players, draw routes by tapping, write each player's job.
-import { POSITIONS, ROUTES, GROUPS, SITUATIONS, OFFENSE_IDS, DEFENSE_IDS, OFFENSE_TEMPLATE, DEFENSE_TEMPLATE } from "./data.js";
-import { drawPlay, Animator, eventToField, FIELD, posInfo, ballEvents } from "./field.js";
+import { POSITIONS, ROUTES, GROUPS, SITUATIONS, OFFENSE_IDS, DEFENSE_IDS, OFFENSE_TEMPLATE, DEFENSE_TEMPLATE } from "./data.js?v=202610290234";
+import { drawPlay, Animator, eventToField, FIELD, posInfo, ballEvents } from "./field.js?v=202610290234";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const snap = (v) => Math.round(v * 2) / 2;

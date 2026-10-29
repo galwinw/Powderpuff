@@ -1,5 +1,5 @@
 // Draws plays on an SVG field and animates them.
-import { POSITIONS } from "./data.js";
+import { POSITIONS } from "./data.js?v=202610290234";
 
 export const FIELD = { w: 30, top: 22, bottom: -8 };
 const NS = "http://www.w3.org/2000/svg";
