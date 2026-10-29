@@ -21,8 +21,19 @@ function toast(msg) {
 }
 
 function plays(side) {
-  return state.playbook.plays.filter((p) => p.side === side);
+  return state.playbook.plays.filter((p) => posSide(p.side) === side);
 }
+
+// Each offense group is its own mini playbook.
+const PLAYBOOK_INFO = {
+  Pass: { icon: "🎯", desc: "The QB throws it to someone. Know your route on each one." },
+  Pitch: { icon: "🔄", desc: "The QB tosses it to a runner. Everyone else blocks for them." },
+  Trick: { icon: "⭐", desc: "The ball changes hands more than once. Save these for when you need a big play." },
+  "QB Run": { icon: "🏃", desc: "The QB keeps it. Only one QB run per set of downs, so pick the moment." },
+  Man: { icon: "🛡️", desc: "" },
+  Blitz: { icon: "⚡", desc: "" },
+};
+const groupLabel = (g) => `${PLAYBOOK_INFO[g]?.icon ? PLAYBOOK_INFO[g].icon + " " : ""}${esc(g)}`;
 
 function rosterPlayer(id) {
   return state.roster.players.find((p) => p.id === id);
@@ -30,8 +41,8 @@ function rosterPlayer(id) {
 
 // Special plays use the offense positions.
 const posSide = (side) => (side === "defense" ? "defense" : "offense");
-const TAB_FOR = { offense: "plays", special: "special", defense: "defense" };
-const SIDE_TITLE = { offense: "Offense", special: "Special Plays", defense: "Defense" };
+const TAB_FOR = { offense: "plays", special: "plays", defense: "defense" };
+const SIDE_TITLE = { offense: "Offense", special: "Offense", defense: "Defense" };
 
 function myPos(side) {
   const me = state.me;
@@ -132,36 +143,42 @@ function openMeDialog() {
 // ---------- Playbook list ----------
 function renderPlays(side) {
   const list = plays(side);
-  const groups = GROUPS[side].filter((g) => list.some((p) => p.group === g));
-  let filter = sessionStorage.getItem("filter:" + side) || "All";
-  if (filter !== "All" && !groups.includes(filter)) filter = "All";
+  const isOff = side === "offense";
+  const groups = [...GROUPS[side], ...new Set(list.map((p) => p.group))].filter((g, i, arr) => arr.indexOf(g) === i && list.some((p) => p.group === g));
+  let book = sessionStorage.getItem("book:" + side) || groups[0];
+  if (!groups.includes(book)) book = groups[0];
   const mine = myPos(side);
 
   view.innerHTML = `
     <div class="page-head">
       <h1>${SIDE_TITLE[side]}</h1>
-      <p class="lede">${{
-        offense: "Our everyday plays. Tap one to watch it run. Every play uses the same formation, so you always line up in the same spot.",
-        special: "Trick plays, blitz beaters and the QB sneak. Use them when the situation calls for it. They work best when the defense doesn't expect them.",
-        defense: "We use two defenses. Tap one to see where you go.",
-      }[side]}</p>
+      <p class="lede">${isOff
+        ? "Pick a playbook, then tap a play to watch it run. Every play starts from the same lineup, so you always line up in the same spot."
+        : "We play man-to-man with two rushers. Tap a play to see where you go."}</p>
     </div>
-    ${!mine ? `<button type="button" class="banner" id="who">${state.me ? "Pick your " + posSide(side) + " position" : "Tell us who you are"} to see your job highlighted in every play →</button>` : ""}
-    <div class="chips" role="group" aria-label="Filter plays">
-      ${["All", ...groups].map((g) => `<button type="button" class="chip ${g === filter ? "on" : ""}" data-filter="${g}">${g}</button>`).join("")}
+    ${!mine ? `<button type="button" class="banner" id="who">${state.me ? "Pick your " + side + " position" : "Tell us who you are"} to see your job highlighted in every play →</button>` : ""}
+    ${isOff ? `
+    <div class="books" role="tablist" aria-label="Playbooks">
+      ${groups.map((g) => `<button type="button" role="tab" class="book ${g === book ? "on" : ""}" data-book="${esc(g)}" aria-selected="${g === book}">
+        <span class="book-icon" aria-hidden="true">${PLAYBOOK_INFO[g]?.icon || "📋"}</span>
+        <span class="book-name">${esc(g)}</span>
+        <span class="book-count">${list.filter((p) => p.group === g).length} plays</span>
+      </button>`).join("")}
     </div>
+    <p class="book-desc" id="book-desc"></p>` : ""}
     <div class="cards" id="cards"></div>
     ${canEdit() ? `<a class="btn primary add" href="#/edit/new-${side}">+ New ${side} play</a>` : ""}`;
 
   function draw() {
-    const shown = list.filter((p) => filter === "All" || p.group === filter);
+    const shown = isOff ? list.filter((p) => p.group === book) : list;
+    if (isOff) $("#book-desc").textContent = PLAYBOOK_INFO[book]?.desc || "";
     $("#cards").innerHTML = shown.length ? shown.map((p) => {
       const me = mine && p.players.find((x) => x.id === mine);
       return `
       <a class="play-card" href="#/play/${p.id}">
         <svg class="thumb" data-play="${p.id}" role="img" aria-label="${esc(p.name)} diagram"></svg>
         <div class="play-card-body">
-          <div class="row between"><h2>${esc(p.name)}</h2><span class="pill">${esc(p.group)}</span></div>
+          <div class="row between"><h2>${esc(p.name)}</h2>${isOff ? "" : `<span class="pill">${groupLabel(p.group)}</span>`}</div>
           <p>${esc(p.summary)}</p>
           ${me ? `<p class="you">${dot(mine)} <strong>You:</strong> ${esc(me.note.split(/(?<=\.)\s/)[0])}</p>` : ""}
         </div>
@@ -173,12 +190,12 @@ function renderPlays(side) {
     }
   }
   draw();
-  view.querySelector(".chips").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-filter]");
+  view.querySelector(".books")?.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-book]");
     if (!b) return;
-    filter = b.dataset.filter;
-    sessionStorage.setItem("filter:" + side, filter);
-    for (const c of view.querySelectorAll("[data-filter]")) c.classList.toggle("on", c === b);
+    book = b.dataset.book;
+    sessionStorage.setItem("book:" + side, book);
+    for (const c of view.querySelectorAll("[data-book]")) { c.classList.toggle("on", c === b); c.setAttribute("aria-selected", c === b); }
     draw();
   });
   $("#who")?.addEventListener("click", openMeDialog);
@@ -200,7 +217,7 @@ function renderPlay(id) {
         <h1>${esc(play.name)}</h1>
         ${canEdit() ? `<a class="btn small" href="#/edit/${play.id}">Edit play</a>` : ""}
       </div>
-      <div class="row wrap gap-s"><span class="pill">${esc(play.group)}</span>${situations.map((s) => `<span class="pill soft">${esc(s.label)}</span>`).join("")}</div>
+      <div class="row wrap gap-s"><span class="pill">${groupLabel(play.group)}</span>${situations.map((s) => `<span class="pill soft">${esc(s.label)}</span>`).join("")}</div>
       <p class="lede">${esc(play.summary)}</p>
     </div>
     <div class="play-layout">
@@ -500,7 +517,7 @@ function renderGameDay() {
     const ps = state.playbook.plays.filter((p) => posSide(p.side) === side && p.situations?.includes(s.id));
     return `<div class="call">
       <div><strong>${esc(s.label)}</strong><span class="muted small">${esc(s.hint)}</span></div>
-      <div class="call-plays">${ps.length ? ps.map((p) => `<a class="call-btn ${p.side === "special" ? "special" : ""}" href="#/play/${p.id}">${p.side === "special" ? "★ " : ""}${esc(p.name)}</a>`).join("") : `<span class="muted small">No play tagged yet</span>`}</div>
+      <div class="call-plays">${ps.length ? ps.map((p) => `<a class="call-btn ${p.group === "Trick" ? "special" : ""}" href="#/play/${p.id}">${p.group === "Trick" ? "★ " : ""}${esc(p.name)}</a>`).join("") : `<span class="muted small">No play tagged yet</span>`}</div>
     </div>`;
   }).join("");
 
@@ -683,7 +700,7 @@ function route() {
   setActiveTab(page);
   switch (page) {
     case "plays": renderPlays("offense"); break;
-    case "special": renderPlays("special"); break;
+    case "special": location.replace("#/plays"); return;
     case "defense": renderPlays("defense"); break;
     case "play": renderPlay(arg); break;
     case "edit": renderEdit(arg); break;
