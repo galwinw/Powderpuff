@@ -83,14 +83,13 @@ function setActiveTab(page) {
 function renderPlays(side) {
   const list = plays(side);
   const isOff = side === "offense";
-  // Plays a coach drew live in their own "Coaches" playbook, newest first.
-  const starter = list.filter((p) => !p.author);
+  // Plays a coach drew show in their own category and also in the "Coaches" playbook (newest first).
   const coachPlays = list.filter((p) => p.author).reverse();
   const groups = isOff
-    ? [...GROUPS[side], ...new Set(starter.map((p) => p.group))].filter((g, i, arr) => arr.indexOf(g) === i && starter.some((p) => p.group === g))
+    ? [...GROUPS[side], ...new Set(list.map((p) => p.group))].filter((g, i, arr) => arr.indexOf(g) === i && list.some((p) => p.group === g))
     : ["Defense"];
   const books = [...groups, "Coaches"];
-  const playsIn = (b) => (b === "Coaches" ? coachPlays : isOff ? starter.filter((p) => p.group === b) : starter);
+  const playsIn = (b) => (b === "Coaches" ? coachPlays : isOff ? list.filter((p) => p.group === b) : list);
   let book = sessionStorage.getItem("book:" + side) || books[0];
   if (!books.includes(book)) book = books[0];
   view.innerHTML = `
