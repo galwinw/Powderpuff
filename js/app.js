@@ -30,6 +30,8 @@ const PLAYBOOK_INFO = {
   Pitch: { icon: "🔄", desc: "The QB tosses it to a runner. Everyone else blocks for them." },
   Trick: { icon: "⭐", desc: "The ball changes hands more than once. Save these for when you need a big play." },
   "QB Run": { icon: "🏃", desc: "The QB keeps it. Only one QB run per set of downs, so pick the moment." },
+  Coaches: { icon: "📋", desc: "Plays drawn by Galwin, Luan and Wyatt. Newest first." },
+  Defense: { icon: "🛡️", desc: "Our man-to-man defense and our one blitz per set of downs." },
   Man: { icon: "🛡️", desc: "" },
   Blitz: { icon: "⚡", desc: "" },
 };
@@ -152,9 +154,16 @@ function openMeDialog() {
 function renderPlays(side) {
   const list = plays(side);
   const isOff = side === "offense";
-  const groups = [...GROUPS[side], ...new Set(list.map((p) => p.group))].filter((g, i, arr) => arr.indexOf(g) === i && list.some((p) => p.group === g));
-  let book = sessionStorage.getItem("book:" + side) || groups[0];
-  if (!groups.includes(book)) book = groups[0];
+  // Plays a coach drew live in their own "Coaches" playbook, newest first.
+  const starter = list.filter((p) => !p.author);
+  const coachPlays = list.filter((p) => p.author).reverse();
+  const groups = isOff
+    ? [...GROUPS[side], ...new Set(starter.map((p) => p.group))].filter((g, i, arr) => arr.indexOf(g) === i && starter.some((p) => p.group === g))
+    : ["Defense"];
+  const books = [...groups, "Coaches"];
+  const playsIn = (b) => (b === "Coaches" ? coachPlays : isOff ? starter.filter((p) => p.group === b) : starter);
+  let book = sessionStorage.getItem("book:" + side) || books[0];
+  if (!books.includes(book)) book = books[0];
   const mine = myPos(side);
 
   view.innerHTML = `
@@ -165,34 +174,35 @@ function renderPlays(side) {
         : "We play man-to-man with two rushers. Tap a play to see where you go."}</p>
     </div>
     ${!mine ? `<button type="button" class="banner" id="who">${state.me ? "Pick your " + side + " position" : "Tell us who you are"} to see your job highlighted in every play →</button>` : ""}
-    ${isOff ? `
-    <div class="books" role="tablist" aria-label="Playbooks">
-      ${groups.map((g) => `<button type="button" role="tab" class="book ${g === book ? "on" : ""}" data-book="${esc(g)}" aria-selected="${g === book}">
+    <div class="books ${isOff ? "" : "two"}" role="tablist" aria-label="Playbooks">
+      ${books.map((g) => `<button type="button" role="tab" class="book ${g === book ? "on" : ""}" data-book="${esc(g)}" aria-selected="${g === book}">
         <span class="book-icon" aria-hidden="true">${PLAYBOOK_INFO[g]?.icon || "📋"}</span>
         <span class="book-name">${esc(g)}</span>
-        <span class="book-count">${list.filter((p) => p.group === g).length} plays</span>
+        <span class="book-count">${playsIn(g).length} ${playsIn(g).length === 1 ? "play" : "plays"}</span>
       </button>`).join("")}
     </div>
-    <p class="book-desc" id="book-desc"></p>` : ""}
+    <p class="book-desc" id="book-desc"></p>
     <div class="cards" id="cards"></div>
-    ${canEdit() ? `<a class="btn primary add" href="#/edit/new-${side}">+ New ${side} play</a>` : ""}`;
+    ${canEdit() ? `<a class="btn primary add" href="#/edit/new-${side}">+ New play</a>` : ""}`;
 
   function draw() {
-    const shown = isOff ? list.filter((p) => p.group === book) : list;
-    if (isOff) $("#book-desc").textContent = PLAYBOOK_INFO[book]?.desc || "";
+    const shown = playsIn(book);
+    $("#book-desc").textContent = PLAYBOOK_INFO[book]?.desc || "";
     $("#cards").innerHTML = shown.length ? shown.map((p) => {
       const me = mine && p.players.find((x) => x.id === mine);
       return `
       <a class="play-card" href="#/play/${p.id}">
         <svg class="thumb" data-play="${p.id}" role="img" aria-label="${esc(p.name)} diagram"></svg>
         <div class="play-card-body">
-          <div class="row between"><h2>${esc(p.name)}</h2>${isOff ? "" : `<span class="pill">${groupLabel(p.group)}</span>`}</div>
+          <div class="row between"><h2>${esc(p.name)}</h2>${book === "Coaches" || !isOff ? `<span class="pill">${groupLabel(p.group)}</span>` : ""}</div>
           ${byline(p) ? `<p class="byline">${esc(byline(p))}</p>` : ""}
           <p>${esc(p.summary)}</p>
           ${me ? `<p class="you">${dot(mine)} <strong>You:</strong> ${esc(me.note.split(/(?<=\.)\s/)[0])}</p>` : ""}
         </div>
       </a>`;
-    }).join("") : `<p class="empty">No ${side} plays yet.${canEdit() ? " Add the first one below." : ""}</p>`;
+    }).join("") : book === "Coaches"
+      ? `<p class="empty">No coach plays yet. ${canEdit() ? "Tap + New play below to draw one." : "Coaches can draw them in coach mode (Team tab)."}</p>`
+      : `<p class="empty">No ${side} plays yet.${canEdit() ? " Add the first one below." : ""}</p>`;
     for (const svg of view.querySelectorAll("svg[data-play]")) {
       const p = list.find((x) => x.id === svg.dataset.play);
       drawPlay(svg, p, { thumb: true, highlight: mine });
